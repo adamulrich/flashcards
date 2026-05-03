@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flashcards — Review</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#4338ca" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Flashcards" />
+</head>
+<body data-page="review">
+  <div class="app-shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Flashcards</p>
+        <h1>Review your deck</h1>
+        <p>Pick a deck and review cards one at a time on this page.</p>
+      </div>
+      <nav aria-label="App navigation" class="nav-actions">
+        <a href="index.html" class="secondary nav-link">Add cards</a>
+        <a href="review.html" class="secondary nav-link">Review cards</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="panel">
+        <div class="deck-row">
+          <label class="deck-label">
+            Deck
+            <div class="deck-controls">
+              <select id="deckSelect"></select>
+            </div>
+          </label>
+        </div>
+
+        <div class="deck-row">
+          <label class="deck-label">
+            Mode
+            <div class="deck-controls">
+              <select id="modeSelect">
+                <option value="flashcards">Flashcards</option>
+                <option value="test">Test</option>
+                <option value="blast">Blast</option>
+                <option value="learn">Learn</option>
+                <option value="match">Match</option>
+                <option value="blocks">Blocks</option>
+              </select>
+            </div>
+          </label>
+        </div>
+
+        <div class="panel-header">
+          <div>
+            <h2 id="reviewDeckTitle">Review mode</h2>
+            <p id="reviewInfo">Flip cards and test yourself.</p>
+          </div>
+          <div class="panel-actions">
+            <button id="prevBtn" class="secondary">Previous</button>
+            <button id="nextBtn" class="secondary">Next</button>
+          </div>
+        </div>
+
+        <div class="review-card" id="reviewCard" tabindex="0" role="button" aria-pressed="false">
+          <div class="front" id="reviewTerm"></div>
+          <div class="back hidden" id="reviewDefinition"></div>
+          <p class="review-tip">Tap or press Enter/Space to flip</p>
+        </div>
+        <div class="review-controls">
+          <button id="flipBtn" class="primary">Flip</button>
+          <button id="shuffleBtn" class="secondary">Shuffle</button>
+        </div>
+
+        <div id="testPanel" class="mode-panel hidden">
+          <label>
+            Answer
+            <input id="answerInput" type="text" placeholder="Type the definition" autocomplete="off" />
+          </label>
+          <div class="actions-row">
+            <button id="checkAnswerBtn" class="primary">Check answer</button>
+          </div>
+          <p id="answerResult" class="mode-feedback"></p>
+        </div>
+
+        <div id="blastPanel" class="mode-panel hidden">
+          <div class="actions-row">
+            <button id="blastStartBtn" class="primary">Start Blast</button>
+          </div>
+          <p id="blastTip" class="mode-feedback">Timed auto-review with quick flips.</p>
+        </div>
+
+        <div id="learnPanel" class="mode-panel hidden">
+          <div class="actions-row">
+            <button id="learnKnowBtn" class="primary">I knew it</button>
+            <button id="learnAgainBtn" class="secondary">Again</button>
+          </div>
+          <p id="learnTip" class="mode-feedback">Mark cards as known or repeat them.</p>
+        </div>
+
+        <div id="matchPanel" class="mode-panel hidden">
+          <div class="match-grid">
+            <div>
+              <h3>Terms</h3>
+              <ul id="matchTerms" class="match-list"></ul>
+            </div>
+            <div>
+              <h3>Definitions</h3>
+              <ul id="matchDefinitions" class="match-list"></ul>
+            </div>
+          </div>
+          <p id="matchStatus" class="mode-feedback"></p>
+        </div>
+
+        <div id="blocksPanel" class="mode-panel hidden">
+          <div id="blocksBoard" class="blocks-board"></div>
+          <div class="actions-row">
+            <button id="blocksSubmitBtn" class="primary">Submit answer</button>
+            <button id="blocksClearBtn" class="secondary">Clear</button>
+          </div>
+          <p id="blocksResult" class="mode-feedback"></p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>Saved locally in your browser. Export to move cards between devices.</p>
+    </footer>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

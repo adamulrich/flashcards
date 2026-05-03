@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flashcards — Add Cards</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#4338ca" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Flashcards" />
+</head>
+<body data-page="entry">
+  <div class="app-shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Flashcards</p>
+        <h1>Build and review cards anywhere</h1>
+        <p>Create one flashcard at a time, then review or export them to another device.</p>
+      </div>
+      <nav aria-label="App navigation" class="nav-actions">
+        <a href="index.html" class="secondary nav-link">Add cards</a>
+        <a href="review.html" class="secondary nav-link">Review cards</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="panel" id="cardFormPanel">
+        <h2>Add a flashcard</h2>
+        <div class="deck-row">
+          <label class="deck-label">
+            Deck
+            <div class="deck-controls">
+              <select id="deckSelect"></select>
+              <button type="button" id="addDeckBtn" class="secondary">+ Add deck</button>
+              <button type="button" id="deleteDeckBtn" class="danger">Delete</button>
+            </div>
+          </label>
+        </div>
+        <form id="cardForm">
+          <label>
+            Term
+            <input type="text" id="termInput" placeholder="Enter the term" autocomplete="off" required />
+          </label>
+          <label>
+            Definition
+            <textarea id="definitionInput" placeholder="Enter the definition" rows="4" required></textarea>
+          </label>
+          <div class="actions-row">
+            <button type="submit" class="primary">Save card</button>
+            <button type="button" id="clearFormBtn" class="secondary">Clear</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel" id="cardLibraryPanel">
+        <div class="panel-header">
+          <div>
+            <h2>Card library</h2>
+            <p id="cardCount">0 cards saved</p>
+          </div>
+          <div class="panel-actions">
+            <button id="exportBtn" class="secondary">Export deck</button>
+            <button id="importBtn" class="secondary">Import JSON</button>
+            <button id="clearAllBtn" class="danger">Clear deck</button>
+          </div>
+        </div>
+        <div id="cardList" class="card-list" aria-live="polite"></div>
+        <input type="file" id="importFileInput" accept="application/json" hidden />
+      </section>
+
+    </main>
+
+    <footer class="footer">
+      <p>Saved locally in your browser. Export to move cards between devices.</p>
+    </footer>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

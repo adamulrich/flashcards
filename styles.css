@@ -1,0 +1,391 @@
+:root {
+  color-scheme: light;
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #f6f8fb;
+  color: #111827;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+button,
+a,
+input,
+textarea {
+  font: inherit;
+}
+
+.nav-actions a.nav-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  min-height: 44px;
+  padding: 12px 18px;
+  border-radius: 14px;
+}
+
+.app-shell {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.hero {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 24px 24px 18px;
+  background: #ffffff;
+  border-radius: 28px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.08);
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: #6366f1;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.85rem;
+}
+
+.hero h1 {
+  margin: 0 0 12px;
+  font-size: clamp(2rem, 2.5vw, 3rem);
+}
+
+.hero p {
+  margin: 0;
+  max-width: 54ch;
+  color: #475569;
+}
+
+.nav-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+main {
+  display: grid;
+  gap: 22px;
+  margin-top: 24px;
+}
+
+.panel {
+  background: #ffffff;
+  border-radius: 24px;
+  padding: 22px;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
+}
+
+.panel-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.panel-header h2 {
+  margin: 0 0 6px;
+  font-size: 1.35rem;
+}
+
+.panel-header p {
+  margin: 0;
+  color: #64748b;
+}
+
+label {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 18px;
+  color: #334155;
+}
+
+.deck-row {
+  margin-bottom: 18px;
+}
+
+.deck-label {
+  width: 100%;
+}
+
+.deck-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.deck-controls select {
+  min-width: 180px;
+  flex: 1 1 200px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid #d1d5db;
+  background: #f8fafc;
+}
+
+input,
+textarea {
+  width: 100%;
+  border-radius: 16px;
+  border: 1px solid #d1d5db;
+  background: #f8fafc;
+  padding: 14px 16px;
+  color: #0f172a;
+}
+
+textarea {
+  resize: vertical;
+}
+
+.actions-row,
+.panel-actions,
+.review-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.mode-panel {
+  margin-top: 20px;
+}
+
+.match-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.match-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.match-item {
+  border: none;
+  border-radius: 12px;
+  padding: 12px;
+  background: #f8fafc;
+  border: 1px solid #d1d5db;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s ease;
+}
+
+.match-item:hover:not(:disabled) {
+  background: #eef2ff;
+  border-color: #4338ca;
+}
+
+.match-item.selected {
+  background: #4338ca;
+  color: white;
+  border-color: #4338ca;
+}
+
+.match-item:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.blocks-board {
+  margin-bottom: 20px;
+}
+
+.blocks-selection {
+  min-height: 60px;
+  padding: 16px;
+  background: #eef2ff;
+  border-radius: 16px;
+  border: 2px solid #4338ca;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 1.1rem;
+  color: #334155;
+  margin-bottom: 16px;
+}
+
+.blocks-fragments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.block-fragment {
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid #d1d5db;
+  background: #f8fafc;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.block-fragment:hover:not(:disabled) {
+  background: #eef2ff;
+  border-color: #4338ca;
+  transform: translateY(-2px);
+}
+
+.block-fragment:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.mode-feedback {
+  margin-top: 12px;
+  padding: 12px;
+  background: #f0fdf4;
+  border-radius: 12px;
+  color: #166534;
+}
+
+@media (max-width: 720px) {
+  .match-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+button {
+  border: none;
+  border-radius: 14px;
+  padding: 12px 18px;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
+}
+
+button:active {
+  transform: translateY(0);
+}
+
+button.primary {
+  background: #4338ca;
+  color: white;
+}
+
+button.secondary {
+  background: #f8fafc;
+  color: #1f2937;
+  box-shadow: inset 0 0 0 1px rgba(100, 116, 139, 0.18);
+}
+
+button.danger {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.card-list {
+  display: grid;
+  gap: 14px;
+}
+
+.flashcard {
+  border-radius: 18px;
+  padding: 18px;
+  background: #f8fafc;
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.1);
+}
+
+.flashcard h3 {
+  margin: 0 0 10px;
+  font-size: 1rem;
+}
+
+.flashcard p {
+  margin: 0;
+  color: #475569;
+  white-space: pre-wrap;
+}
+
+.flashcard small {
+  display: block;
+  margin-top: 12px;
+  color: #64748b;
+}
+
+.review-card {
+  min-height: 260px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  border-radius: 28px;
+  padding: 28px;
+  background: linear-gradient(180deg, #eef2ff 0%, #ffffff 100%);
+  border: 1px solid rgba(99, 102, 241, 0.18);
+  position: relative;
+}
+
+.review-card:focus {
+  outline: 3px solid rgba(99, 102, 241, 0.35);
+}
+
+.review-card .front,
+.review-card .back {
+  font-size: 1.3rem;
+  line-height: 1.5;
+  max-width: 90%;
+}
+
+.review-card .back {
+  color: #334155;
+}
+
+.review-tip {
+  margin-top: 18px;
+  color: #64748b;
+  font-size: 0.95rem;
+}
+
+.hidden {
+  display: none;
+}
+
+.footer {
+  text-align: center;
+  margin: 30px 0 0;
+  color: #64748b;
+}
+
+@media (max-width: 720px) {
+  .hero,
+  .panel-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .nav-actions,
+  .panel-actions,
+  .actions-row,
+  .review-controls {
+    justify-content: stretch;
+  }
+}
