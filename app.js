@@ -310,7 +310,12 @@ async function loginWithFacebook() {
 
 async function logOut() {
   try {
-    if (window.FB && fbSDKPromise) await new Promise((resolve) => FB.logout(resolve));
+    if (window.FB && fbSDKPromise) {
+      const status = await new Promise((resolve) => FB.getLoginStatus(resolve));
+      if (status.status === 'connected') {
+        await new Promise((resolve) => FB.logout(resolve));
+      }
+    }
   } catch (e) { /* ignore */ }
   try {
     await Parse.User.logOut();
@@ -326,20 +331,28 @@ function updateUserUI() {
   const loginBtn = getById('loginBtn');
   const userInfo = getById('userInfo');
   const userName = getById('userName');
+  const loginScreen = getById('loginScreen');
+  const mainContent = document.querySelector('main');
   const user = typeof Parse !== 'undefined' ? Parse.User.current() : null;
 
   if (!serverAvailable) {
     showElement(loginBtn, false);
     showElement(userInfo, false);
+    showElement(loginScreen, false);
+    showElement(mainContent, true);
     return;
   }
   if (user) {
     showElement(loginBtn, false);
     showElement(userInfo, true);
     if (userName) setText(userName, user.get('displayName') || 'Signed in');
+    showElement(loginScreen, false);
+    showElement(mainContent, true);
   } else {
-    showElement(loginBtn, true);
+    showElement(loginBtn, false);
     showElement(userInfo, false);
+    showElement(loginScreen, true);
+    showElement(mainContent, false);
   }
 }
 
@@ -356,8 +369,10 @@ async function pageSetup() {
   updateUserUI();
 
   const loginBtn = getById('loginBtn');
+  const loginScreenBtn = getById('loginScreenBtn');
   const logoutBtn = getById('logoutBtn');
   if (loginBtn) loginBtn.addEventListener('click', loginWithFacebook);
+  if (loginScreenBtn) loginScreenBtn.addEventListener('click', loginWithFacebook);
   if (logoutBtn) logoutBtn.addEventListener('click', logOut);
 
   if (document.body.dataset.page === 'entry') {
@@ -383,6 +398,30 @@ function setupEntryPage() {
   const addDeckBtn = getById('addDeckBtn');
   const deleteDeckBtn = getById('deleteDeckBtn');
   const deckSelect = getById('deckSelect');
+  const newDeckRow = getById('newDeckRow');
+  const newDeckName = getById('newDeckName');
+  const confirmNewDeckBtn = getById('confirmNewDeckBtn');
+  const cancelNewDeckBtn = getById('cancelNewDeckBtn');
+  const submitBtn = cardForm?.querySelector('button[type="submit"]');
+
+  let editingIndex = null;
+
+  function setEditMode(index) {
+    const card = getCurrentCards()[index];
+    if (!card) return;
+    editingIndex = index;
+    termInput.value = card.term;
+    definitionInput.value = card.definition;
+    if (submitBtn) submitBtn.textContent = 'Update card';
+    getById('cardFormPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    termInput.focus();
+  }
+
+  function clearEditMode() {
+    editingIndex = null;
+    if (cardForm) cardForm.reset();
+    if (submitBtn) submitBtn.textContent = 'Save card';
+  }
 
   function updateEntryCardCount() {
     if (!cardCount) return;
@@ -403,12 +442,28 @@ function setupEntryPage() {
 
     cards.forEach((card, index) => {
       const item = document.createElement('article');
-      item.className = 'flashcard';
+      item.className = `flashcard${editingIndex === index ? ' flashcard--editing' : ''}`;
       item.innerHTML = `
-        <h3>${sanitize(card.term)}</h3>
-        <p>${sanitize(card.definition)}</p>
-        <small>Card ${index + 1}</small>
+        <div class="flashcard-body">
+          <h3>${sanitize(card.term)}</h3>
+          <p>${sanitize(card.definition)}</p>
+        </div>
+        <div class="flashcard-actions">
+          <button type="button" class="secondary edit-card-btn">Edit</button>
+          <button type="button" class="danger delete-card-btn">Delete</button>
+        </div>
       `;
+      item.querySelector('.edit-card-btn').addEventListener('click', () => setEditMode(index));
+      item.querySelector('.delete-card-btn').addEventListener('click', () => {
+        if (!confirm(`Delete "${card.term}"?`)) return;
+        const deck = getCurrentDeck();
+        deck.cards.splice(index, 1);
+        if (editingIndex === index) clearEditMode();
+        else if (editingIndex !== null && editingIndex > index) editingIndex--;
+        saveState();
+        renderCardList();
+        updateEntryCardCount();
+      });
       cardList.appendChild(item);
     });
   }
@@ -421,19 +476,23 @@ function setupEntryPage() {
       if (!term || !definition) return;
 
       const deck = getCurrentDeck();
-      deck.cards.unshift({ term, definition });
+      if (editingIndex !== null) {
+        deck.cards[editingIndex] = { term, definition };
+        clearEditMode();
+      } else {
+        deck.cards.unshift({ term, definition });
+        cardForm.reset();
+        termInput.focus();
+      }
       saveState();
       renderCardList();
       updateEntryCardCount();
-      cardForm.reset();
-      termInput.focus();
     });
   }
 
   if (clearFormBtn) {
     clearFormBtn.addEventListener('click', () => {
-      if (!cardForm) return;
-      cardForm.reset();
+      clearEditMode();
       termInput.focus();
     });
   }
@@ -492,18 +551,42 @@ function setupEntryPage() {
     });
   }
 
-  if (addDeckBtn) {
-    addDeckBtn.addEventListener('click', () => {
-      const name = prompt('Deck name', `Deck ${state.decks.length + 1}`);
-      if (!name) return;
-      const deck = createDeck(name);
-      state.decks.push(deck);
-      state.selectedDeckId = deck.id;
-      currentIndex = 0;
-      saveState();
-      updateDeckOptions();
-      updateEntryCardCount();
-      renderCardList();
+  function openNewDeckRow() {
+    if (newDeckRow) {
+      showElement(newDeckRow, true);
+      if (newDeckName) {
+        newDeckName.value = '';
+        newDeckName.focus();
+      }
+    }
+  }
+
+  function closeNewDeckRow() {
+    showElement(newDeckRow, false);
+    if (newDeckName) newDeckName.value = '';
+  }
+
+  function commitNewDeck() {
+    const name = newDeckName?.value.trim();
+    if (!name) { newDeckName?.focus(); return; }
+    const deck = createDeck(name);
+    state.decks.push(deck);
+    state.selectedDeckId = deck.id;
+    currentIndex = 0;
+    saveState();
+    updateDeckOptions();
+    updateEntryCardCount();
+    renderCardList();
+    closeNewDeckRow();
+  }
+
+  if (addDeckBtn) addDeckBtn.addEventListener('click', openNewDeckRow);
+  if (confirmNewDeckBtn) confirmNewDeckBtn.addEventListener('click', commitNewDeck);
+  if (cancelNewDeckBtn) cancelNewDeckBtn.addEventListener('click', closeNewDeckRow);
+  if (newDeckName) {
+    newDeckName.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); commitNewDeck(); }
+      if (e.key === 'Escape') closeNewDeckRow();
     });
   }
 
