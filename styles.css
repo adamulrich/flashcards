@@ -48,12 +48,77 @@ textarea {
   letter-spacing: -0.02em;
 }
 
+.app-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .app-bar-nav {
   display: flex;
   gap: 4px;
   background: #f1f5f9;
   padding: 4px;
   border-radius: 14px;
+}
+
+.auth-section {
+  display: flex;
+  align-items: center;
+}
+
+.auth-login-btn {
+  padding: 7px 14px;
+  background: #1877f2;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.auth-login-btn:hover {
+  background: #1666d6;
+}
+
+.auth-login-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.auth-user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.auth-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #374151;
+  white-space: nowrap;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.auth-signout-btn {
+  padding: 5px 10px;
+  background: transparent;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.auth-signout-btn:hover {
+  background: #f1f5f9;
+  color: #1e293b;
 }
 
 .app-bar-link {

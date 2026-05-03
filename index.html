@@ -18,10 +18,19 @@
   <div class="app-shell">
     <header class="app-bar">
       <span class="app-bar-brand">Flashcards</span>
-      <nav class="app-bar-nav" aria-label="App navigation">
-        <a href="index.html" class="app-bar-link">✏️ Add cards</a>
-        <a href="review.html" class="app-bar-link">📖 Review</a>
-      </nav>
+      <div class="app-bar-right">
+        <nav class="app-bar-nav" aria-label="App navigation">
+          <a href="index.html" class="app-bar-link">✏️ Add cards</a>
+          <a href="review.html" class="app-bar-link">📖 Review</a>
+        </nav>
+        <div id="authSection" class="auth-section">
+          <button type="button" id="loginBtn" class="auth-login-btn hidden">Sign in with Facebook</button>
+          <div id="userInfo" class="auth-user hidden">
+            <span id="userName" class="auth-name"></span>
+            <button type="button" id="logoutBtn" class="auth-signout-btn">Sign out</button>
+          </div>
+        </div>
+      </div>
     </header>
 
     <main>

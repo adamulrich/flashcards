@@ -7,6 +7,7 @@ const PARSE_JS_KEY = 'kEF8693hhSC0F9M8H0dpUhWpOVYDrJoPuCVadDcw';
 
 
 const PARSE_SERVER_URL = 'https://parseapi.back4app.com';
+const FACEBOOK_APP_ID = '1486276799536861'; 
 
 let state = {
   decks: [],
@@ -15,6 +16,7 @@ let state = {
 let currentIndex = 0;
 let showingBack = false;
 let serverAvailable = false;
+let fbSDKPromise = null;
 
 function generateId() {
   return `deck-${Math.random().toString(36).slice(2, 10)}`;
@@ -93,24 +95,13 @@ function normalizeState(raw) {
 }
 
 async function checkServerAvailability() {
-  if (typeof Parse === 'undefined') {
-    serverAvailable = false;
-    return;
-  }
+  if (typeof Parse === 'undefined') { serverAvailable = false; return; }
   try {
     Parse.initialize(PARSE_APP_ID, PARSE_JS_KEY);
     Parse.serverURL = PARSE_SERVER_URL;
-    try {
-      const query = new Parse.Query('Deck');
-      query.limit(1);
-      await query.find();
-    } catch (queryError) {
-      // Error 101 = class not found; it will be created on first save — still available
-      if (queryError.code !== 101) throw queryError;
-    }
     serverAvailable = true;
   } catch (error) {
-    console.warn('Back4App unavailable:', error.message);
+    console.warn('Back4App init failed:', error.message);
     serverAvailable = false;
   }
 }
@@ -134,7 +125,7 @@ function loadLocalState() {
 }
 
 async function loadServerState() {
-  if (!serverAvailable) return;
+  if (!serverAvailable || !Parse.User.current()) return;
   try {
     const query = new Parse.Query('Deck');
     query.limit(1000);
@@ -161,13 +152,15 @@ function saveLocalState() {
 }
 
 async function saveToServer() {
-  if (!serverAvailable) return;
+  if (!serverAvailable || !Parse.User.current()) return;
   try {
     for (const deck of state.decks) {
       const ParseDeck = Parse.Object.extend('Deck');
       const parseObj = new ParseDeck();
       if (deck.parseId) {
         parseObj.id = deck.parseId;
+      } else {
+        parseObj.setACL(new Parse.ACL(Parse.User.current()));
       }
       parseObj.set('name', deck.name);
       parseObj.set('cards', deck.cards);
@@ -184,7 +177,7 @@ async function saveToServer() {
 }
 
 async function deleteFromParse(parseId) {
-  if (!serverAvailable || !parseId) return;
+  if (!serverAvailable || !Parse.User.current() || !parseId) return;
   try {
     const ParseDeck = Parse.Object.extend('Deck');
     const parseObj = new ParseDeck();
@@ -264,13 +257,108 @@ function getById(id) {
   return document.getElementById(id);
 }
 
+function loadFacebookSDK() {
+  if (fbSDKPromise) return fbSDKPromise;
+  fbSDKPromise = new Promise((resolve) => {
+    if (window.FB) { resolve(); return; }
+    window.fbAsyncInit = () => {
+      FB.init({ appId: FACEBOOK_APP_ID, cookie: true, xfbml: false, version: 'v19.0' });
+      resolve();
+    };
+    const script = document.createElement('script');
+    script.src = 'https://connect.facebook.net/en_US/sdk.js';
+    script.async = true;
+    document.head.appendChild(script);
+  });
+  return fbSDKPromise;
+}
+
+async function loginWithFacebook() {
+  const loginBtn = getById('loginBtn');
+  if (loginBtn) loginBtn.disabled = true;
+  try {
+    await loadFacebookSDK();
+    const authResponse = await new Promise((resolve, reject) => {
+      FB.login((response) => {
+        if (response.authResponse) resolve(response.authResponse);
+        else reject(new Error('cancelled'));
+      }, { scope: 'public_profile' });
+    });
+    const authData = { id: authResponse.userID, access_token: authResponse.accessToken };
+    const user = new Parse.User();
+    await user.linkWith('facebook', { authData });
+    const me = await new Promise((resolve) => FB.api('/me', { fields: 'name' }, resolve));
+    if (me?.name) {
+      user.set('displayName', me.name);
+      await user.save();
+    }
+    await saveToServer();
+    await loadServerState();
+    updateDeckOptions();
+    updateUserUI();
+    if (document.body.dataset.page === 'entry') setupEntryPage();
+    else if (document.body.dataset.page === 'review') setupReviewPage();
+  } catch (err) {
+    if (err.message !== 'cancelled') {
+      console.error('Facebook login failed', err);
+      alert('Sign in failed. Please try again.');
+    }
+  } finally {
+    if (loginBtn) loginBtn.disabled = false;
+  }
+}
+
+async function logOut() {
+  try {
+    if (window.FB && fbSDKPromise) await new Promise((resolve) => FB.logout(resolve));
+  } catch (e) { /* ignore */ }
+  try {
+    await Parse.User.logOut();
+  } catch (e) { console.warn('Parse logout error', e); }
+  state.decks.forEach((d) => { d.parseId = null; d.id = generateId(); });
+  state.selectedDeckId = state.decks[0]?.id || null;
+  saveLocalState();
+  updateDeckOptions();
+  updateUserUI();
+}
+
+function updateUserUI() {
+  const loginBtn = getById('loginBtn');
+  const userInfo = getById('userInfo');
+  const userName = getById('userName');
+  const user = typeof Parse !== 'undefined' ? Parse.User.current() : null;
+
+  if (!serverAvailable) {
+    showElement(loginBtn, false);
+    showElement(userInfo, false);
+    return;
+  }
+  if (user) {
+    showElement(loginBtn, false);
+    showElement(userInfo, true);
+    if (userName) setText(userName, user.get('displayName') || 'Signed in');
+  } else {
+    showElement(loginBtn, true);
+    showElement(userInfo, false);
+  }
+}
+
 async function pageSetup() {
   await checkServerAvailability();
   loadLocalState();
   if (serverAvailable) {
-    await loadServerState();
+    loadFacebookSDK(); // pre-load so FB.login fires without popup-blocker delay
+    if (Parse.User.current()) {
+      await loadServerState();
+    }
   }
   updateDeckOptions();
+  updateUserUI();
+
+  const loginBtn = getById('loginBtn');
+  const logoutBtn = getById('logoutBtn');
+  if (loginBtn) loginBtn.addEventListener('click', loginWithFacebook);
+  if (logoutBtn) logoutBtn.addEventListener('click', logOut);
 
   if (document.body.dataset.page === 'entry') {
     setupEntryPage();
