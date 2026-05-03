@@ -130,18 +130,14 @@ async function loadServerState() {
     const query = new Parse.Query('Deck');
     query.limit(1000);
     const results = await query.find();
-    if (results.length > 0) {
-      const decks = results.map((obj) => ({
-        id: obj.id,
-        parseId: obj.id,
-        name: obj.get('name') || DEFAULT_DECK_NAME,
-        cards: obj.get('cards') || [],
-      }));
-      state.decks = decks;
-      if (!state.selectedDeckId || !state.decks.some((d) => d.id === state.selectedDeckId)) {
-        state.selectedDeckId = state.decks[0]?.id || null;
-      }
-    }
+    const decks = results.map((obj) => ({
+      id: obj.id,
+      parseId: obj.id,
+      name: obj.get('name') || DEFAULT_DECK_NAME,
+      cards: obj.get('cards') || [],
+    }));
+    state.decks = decks.length ? decks : [];
+    state.selectedDeckId = state.decks[0]?.id || null;
   } catch (error) {
     console.error('Failed to load from Parse', error);
   }
@@ -155,6 +151,7 @@ async function saveToServer() {
   if (!serverAvailable || !Parse.User.current()) return;
   try {
     for (const deck of state.decks) {
+      if (!deck.parseId && !deck.cards.length) continue; // don't upload empty new decks
       const ParseDeck = Parse.Object.extend('Deck');
       const parseObj = new ParseDeck();
       if (deck.parseId) {
@@ -211,7 +208,6 @@ function getCurrentCards() {
 function updateDeckOptions() {
   const deckSelect = getById('deckSelect');
   if (!deckSelect) return;
-  const currentDeck = getCurrentDeck();
   deckSelect.innerHTML = '';
 
   state.decks.forEach((deck) => {
@@ -221,10 +217,12 @@ function updateDeckOptions() {
     deckSelect.appendChild(option);
   });
 
-  deckSelect.value = currentDeck.id;
+  const currentDeck = getCurrentDeck();
+  if (currentDeck) deckSelect.value = currentDeck.id;
+
   const deleteDeckBtn = getById('deleteDeckBtn');
   if (deleteDeckBtn) {
-    deleteDeckBtn.disabled = state.decks.length === 1;
+    deleteDeckBtn.disabled = state.decks.length <= 1;
   }
 }
 
@@ -317,28 +315,18 @@ async function logOut() {
 }
 
 function updateUserUI() {
-  const loginBtn = getById('loginBtn');
   const userInfo = getById('userInfo');
   const userName = getById('userName');
   const loginScreen = getById('loginScreen');
   const mainContent = document.querySelector('main');
   const user = typeof Parse !== 'undefined' ? Parse.User.current() : null;
 
-  if (!serverAvailable) {
-    showElement(loginBtn, false);
-    showElement(userInfo, false);
-    showElement(loginScreen, false);
-    showElement(mainContent, true);
-    return;
-  }
   if (user) {
-    showElement(loginBtn, false);
     showElement(userInfo, true);
     if (userName) setText(userName, user.get('displayName') || 'Signed in');
     showElement(loginScreen, false);
     showElement(mainContent, true);
   } else {
-    showElement(loginBtn, false);
     showElement(userInfo, false);
     showElement(loginScreen, true);
     showElement(mainContent, false);
@@ -347,20 +335,15 @@ function updateUserUI() {
 
 async function pageSetup() {
   await checkServerAvailability();
-  loadLocalState();
-  if (serverAvailable) {
-    loadFacebookSDK(); // pre-load so FB.login fires without popup-blocker delay
-    if (Parse.User.current()) {
-      await loadServerState();
-    }
+  loadFacebookSDK(); // pre-load so FB.login fires synchronously on click
+  if (Parse.User.current()) {
+    await loadServerState();
+    updateDeckOptions();
   }
-  updateDeckOptions();
   updateUserUI();
 
-  const loginBtn = getById('loginBtn');
   const loginScreenBtn = getById('loginScreenBtn');
   const logoutBtn = getById('logoutBtn');
-  if (loginBtn) loginBtn.addEventListener('click', loginWithFacebook);
   if (loginScreenBtn) loginScreenBtn.addEventListener('click', loginWithFacebook);
   if (logoutBtn) logoutBtn.addEventListener('click', logOut);
 
