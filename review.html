@@ -3,26 +3,24 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Flashcards — Review</title>
+  <title>Flashcards</title>
   <link rel="stylesheet" href="styles.css" />
   <link rel="icon" href="icon.svg" type="image/svg+xml" />
   <link rel="manifest" href="manifest.webmanifest" />
   <meta name="theme-color" content="#4338ca" />
+  <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Flashcards" />
+  <link rel="apple-touch-icon" href="icon.svg" />
 </head>
 <body data-page="review">
   <div class="app-shell">
-    <header class="hero">
-      <div>
-        <p class="eyebrow">Flashcards</p>
-        <h1>Review your deck</h1>
-        <p>Pick a deck and review cards one at a time on this page.</p>
-      </div>
-      <nav aria-label="App navigation" class="nav-actions">
-        <a href="index.html" class="secondary nav-link">Add cards</a>
-        <a href="review.html" class="secondary nav-link">Review cards</a>
+    <header class="app-bar">
+      <span class="app-bar-brand">Flashcards</span>
+      <nav class="app-bar-nav" aria-label="App navigation">
+        <a href="index.html" class="app-bar-link">✏️ Add cards</a>
+        <a href="review.html" class="app-bar-link">📖 Review</a>
       </nav>
     </header>
 
@@ -37,20 +35,15 @@
           </label>
         </div>
 
-        <div class="deck-row">
-          <label class="deck-label">
-            Mode
-            <div class="deck-controls">
-              <select id="modeSelect">
-                <option value="flashcards">Flashcards</option>
-                <option value="test">Test</option>
-                <option value="blast">Blast</option>
-                <option value="learn">Learn</option>
-                <option value="match">Match</option>
-                <option value="blocks">Blocks</option>
-              </select>
-            </div>
-          </label>
+        <div id="modePicker" class="mode-picker" role="group" aria-label="Study mode">
+          <button type="button" class="mode-btn active" data-mode="flashcards"><span class="mode-icon">🃏</span><span class="mode-label">Flashcards</span></button>
+          <button type="button" class="mode-btn" data-mode="learn"><span class="mode-icon">🧠</span><span class="mode-label">Learn</span></button>
+          <button type="button" class="mode-btn" data-mode="write"><span class="mode-icon">✏️</span><span class="mode-label">Write</span></button>
+          <button type="button" class="mode-btn" data-mode="test"><span class="mode-icon">📋</span><span class="mode-label">Test</span></button>
+          <button type="button" class="mode-btn" data-mode="match"><span class="mode-icon">🔗</span><span class="mode-label">Match</span></button>
+          <button type="button" class="mode-btn" data-mode="gravity"><span class="mode-icon">🌌</span><span class="mode-label">Gravity</span></button>
+          <button type="button" class="mode-btn" data-mode="blast"><span class="mode-icon">⚡</span><span class="mode-label">Blast</span></button>
+          <button type="button" class="mode-btn" data-mode="blocks"><span class="mode-icon">🧩</span><span class="mode-label">Blocks</span></button>
         </div>
 
         <div class="panel-header">
@@ -67,14 +60,15 @@
         <div class="review-card" id="reviewCard" tabindex="0" role="button" aria-pressed="false">
           <div class="front" id="reviewTerm"></div>
           <div class="back hidden" id="reviewDefinition"></div>
-          <p class="review-tip">Tap or press Enter/Space to flip</p>
+          <p class="review-tip">Tap or press Enter / Space to flip</p>
         </div>
         <div class="review-controls">
           <button id="flipBtn" class="primary">Flip</button>
           <button id="shuffleBtn" class="secondary">Shuffle</button>
         </div>
 
-        <div id="testPanel" class="mode-panel hidden">
+        <!-- Write: type the definition -->
+        <div id="writePanel" class="mode-panel hidden">
           <label>
             Answer
             <input id="answerInput" type="text" placeholder="Type the definition" autocomplete="off" />
@@ -85,6 +79,7 @@
           <p id="answerResult" class="mode-feedback"></p>
         </div>
 
+        <!-- Blast: auto-cycle timer -->
         <div id="blastPanel" class="mode-panel hidden">
           <div class="actions-row">
             <button id="blastStartBtn" class="primary">Start Blast</button>
@@ -92,15 +87,58 @@
           <p id="blastTip" class="mode-feedback">Timed auto-review with quick flips.</p>
         </div>
 
+        <!-- Learn: adaptive MC → written with progress -->
         <div id="learnPanel" class="mode-panel hidden">
-          <div class="actions-row">
-            <button id="learnKnowBtn" class="primary">I knew it</button>
-            <button id="learnAgainBtn" class="secondary">Again</button>
+          <div class="learn-progress">
+            <div class="learn-progress-bar">
+              <div id="learnProgressFill" class="learn-progress-fill"></div>
+            </div>
+            <span id="learnProgressText" class="learn-progress-text">0 of 0 learned</span>
           </div>
-          <p id="learnTip" class="mode-feedback">Mark cards as known or repeat them.</p>
+          <div id="learnMCSection">
+            <p class="learn-phase-label">Multiple choice</p>
+            <p id="learnMCPrompt" class="learn-prompt"></p>
+            <div id="learnMCOptions" class="mc-options"></div>
+            <p id="learnMCFeedback" class="learn-feedback hidden"></p>
+          </div>
+          <div id="learnWrittenSection" class="hidden">
+            <p class="learn-phase-label">Written answer</p>
+            <p id="learnWrittenPrompt" class="learn-prompt"></p>
+            <label>
+              <input id="learnWrittenInput" type="text" placeholder="Type the definition" autocomplete="off" />
+            </label>
+            <div class="actions-row">
+              <button id="learnSubmitBtn" class="primary">Submit</button>
+            </div>
+            <p id="learnWrittenFeedback" class="learn-feedback hidden"></p>
+          </div>
         </div>
 
+        <!-- Test: mixed MC + T/F + written, submit all -->
+        <div id="testModePanel" class="mode-panel hidden">
+          <div id="testQuestionsWrapper">
+            <div id="testQuestions"></div>
+            <div class="actions-row">
+              <button id="testSubmitBtn" class="primary">Submit test</button>
+            </div>
+          </div>
+          <div id="testResults" class="hidden">
+            <div class="test-score-banner">
+              <p id="testScoreText"></p>
+            </div>
+            <div id="testResultsList"></div>
+            <div class="actions-row">
+              <button id="testRetryBtn" class="secondary">Retake test</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Match: timed -->
         <div id="matchPanel" class="mode-panel hidden">
+          <div class="match-header">
+            <span>Time: <strong id="matchTimer">0.0s</strong></span>
+            <span id="matchBestTime" class="match-best-time"></span>
+          </div>
           <div class="match-grid">
             <div>
               <h3>Terms</h3>
@@ -114,6 +152,24 @@
           <p id="matchStatus" class="mode-feedback"></p>
         </div>
 
+        <!-- Gravity: falling terms game -->
+        <div id="gravityPanel" class="mode-panel hidden">
+          <div class="gravity-hud">
+            <span>Score: <strong id="gravityScore">0</strong></span>
+            <span id="gravityLives">♥♥♥</span>
+          </div>
+          <div id="gravityBoard" class="gravity-board">
+            <div id="gravityTerm" class="gravity-term"></div>
+          </div>
+          <input id="gravityInput" type="text" class="gravity-input" placeholder="Type the definition and press Enter…" autocomplete="off" disabled />
+          <p id="gravityFeedback" class="learn-feedback hidden"></p>
+          <div id="gravityStartScreen" class="gravity-start-screen">
+            <p>Terms fall from the top. Type the definition before they hit the ground.</p>
+            <button id="gravityStartBtn" class="primary">Start Gravity</button>
+          </div>
+        </div>
+
+        <!-- Blocks: word reconstruction -->
         <div id="blocksPanel" class="mode-panel hidden">
           <div id="blocksBoard" class="blocks-board"></div>
           <div class="actions-row">
@@ -126,9 +182,15 @@
     </main>
 
     <footer class="footer">
-      <p>Saved locally in your browser. Export to move cards between devices.</p>
+      <p>Syncs to Back4App when online. Export JSON to share decks. · <a href="privacy.html">Privacy &amp; Data Retention</a></p>
     </footer>
   </div>
+  <script src="https://unpkg.com/parse/dist/parse.min.js"></script>
   <script src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js'));
+    }
+  </script>
 </body>
 </html>

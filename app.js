@@ -1,8 +1,12 @@
 const STORAGE_KEY = 'flashcards-data-v1';
 const DEFAULT_DECK_NAME = 'Default deck';
-const API_URL = window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1') 
-  ? 'http://localhost:3000' 
-  : window.location.origin;
+
+// Replace these with your credentials from https://www.back4app.com (Dashboard → App Settings → Security & Keys)
+const PARSE_APP_ID = 'Kvds5AgivKf3ddglbGdKasIosJQXdv0jqGX6EPaV';
+const PARSE_JS_KEY = 'kEF8693hhSC0F9M8H0dpUhWpOVYDrJoPuCVadDcw';
+
+
+const PARSE_SERVER_URL = 'https://parseapi.back4app.com';
 
 let state = {
   decks: [],
@@ -23,6 +27,7 @@ function isValidCard(item) {
 function createDeck(name) {
   return {
     id: generateId(),
+    parseId: null,
     name: name.trim() || DEFAULT_DECK_NAME,
     cards: [],
   };
@@ -34,6 +39,7 @@ function normalizeState(raw) {
       decks: [
         {
           id: generateId(),
+          parseId: null,
           name: DEFAULT_DECK_NAME,
           cards: raw
             .filter(isValidCard)
@@ -47,6 +53,7 @@ function normalizeState(raw) {
   if (raw && Array.isArray(raw.decks)) {
     const decks = raw.decks.map((deck) => ({
       id: deck.id || generateId(),
+      parseId: deck.parseId || null,
       name: typeof deck.name === 'string' && deck.name.trim() ? deck.name.trim() : DEFAULT_DECK_NAME,
       cards: Array.isArray(deck.cards)
         ? deck.cards
@@ -68,6 +75,7 @@ function normalizeState(raw) {
       decks: [
         {
           id: generateId(),
+          parseId: null,
           name: DEFAULT_DECK_NAME,
           cards: raw
             .filter(isValidCard)
@@ -85,10 +93,24 @@ function normalizeState(raw) {
 }
 
 async function checkServerAvailability() {
+  if (typeof Parse === 'undefined') {
+    serverAvailable = false;
+    return;
+  }
   try {
-    const response = await fetch(`${API_URL}/api/health`, { method: 'GET' });
-    serverAvailable = response.ok;
+    Parse.initialize(PARSE_APP_ID, PARSE_JS_KEY);
+    Parse.serverURL = PARSE_SERVER_URL;
+    try {
+      const query = new Parse.Query('Deck');
+      query.limit(1);
+      await query.find();
+    } catch (queryError) {
+      // Error 101 = class not found; it will be created on first save — still available
+      if (queryError.code !== 101) throw queryError;
+    }
+    serverAvailable = true;
   } catch (error) {
+    console.warn('Back4App unavailable:', error.message);
     serverAvailable = false;
   }
 }
@@ -114,16 +136,23 @@ function loadLocalState() {
 async function loadServerState() {
   if (!serverAvailable) return;
   try {
-    const response = await fetch(`${API_URL}/api/decks`);
-    if (response.ok) {
-      const decks = await response.json();
+    const query = new Parse.Query('Deck');
+    query.limit(1000);
+    const results = await query.find();
+    if (results.length > 0) {
+      const decks = results.map((obj) => ({
+        id: obj.id,
+        parseId: obj.id,
+        name: obj.get('name') || DEFAULT_DECK_NAME,
+        cards: obj.get('cards') || [],
+      }));
       state.decks = decks;
       if (!state.selectedDeckId || !state.decks.some((d) => d.id === state.selectedDeckId)) {
         state.selectedDeckId = state.decks[0]?.id || null;
       }
     }
   } catch (error) {
-    console.error('Failed to load server state', error);
+    console.error('Failed to load from Parse', error);
   }
 }
 
@@ -135,14 +164,34 @@ async function saveToServer() {
   if (!serverAvailable) return;
   try {
     for (const deck of state.decks) {
-      await fetch(`${API_URL}/api/decks/${deck.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: deck.name, cards: deck.cards }),
-      });
+      const ParseDeck = Parse.Object.extend('Deck');
+      const parseObj = new ParseDeck();
+      if (deck.parseId) {
+        parseObj.id = deck.parseId;
+      }
+      parseObj.set('name', deck.name);
+      parseObj.set('cards', deck.cards);
+      const saved = await parseObj.save();
+      if (!deck.parseId) {
+        deck.id = saved.id;
+        deck.parseId = saved.id;
+        saveLocalState();
+      }
     }
   } catch (error) {
-    console.error('Failed to sync to server', error);
+    console.error('Failed to sync to Parse', error);
+  }
+}
+
+async function deleteFromParse(parseId) {
+  if (!serverAvailable || !parseId) return;
+  try {
+    const ParseDeck = Parse.Object.extend('Deck');
+    const parseObj = new ParseDeck();
+    parseObj.id = parseId;
+    await parseObj.destroy();
+  } catch (error) {
+    console.error('Failed to delete from Parse', error);
   }
 }
 
@@ -375,10 +424,12 @@ function setupEntryPage() {
       if (state.decks.length === 1) return;
       const deck = getCurrentDeck();
       if (!confirm(`Delete deck "${deck.name}" and all ${deck.cards.length} cards?`)) return;
+      const { parseId } = deck;
       state.decks = state.decks.filter((item) => item.id !== deck.id);
       state.selectedDeckId = state.decks[0].id;
       currentIndex = 0;
       saveState();
+      deleteFromParse(parseId);
       updateDeckOptions();
       updateEntryCardCount();
       renderCardList();
@@ -404,8 +455,6 @@ function setupReviewPage() {
   const checkAnswerBtn = getById('checkAnswerBtn');
   const answerResult = getById('answerResult');
   const blastStartBtn = getById('blastStartBtn');
-  const learnKnowBtn = getById('learnKnowBtn');
-  const learnAgainBtn = getById('learnAgainBtn');
   const matchTerms = getById('matchTerms');
   const matchDefinitions = getById('matchDefinitions');
   const matchStatus = getById('matchStatus');
@@ -416,46 +465,35 @@ function setupReviewPage() {
   const deckSelect = getById('deckSelect');
 
   const modeSettings = {
-    flashcards: {
-      label: 'Flashcards',
-      instruction: 'Tap the card or press Flip to reveal the answer.',
-    },
-    test: {
-      label: 'Test',
-      instruction: 'Type the definition and press Check answer.',
-    },
-    blast: {
-      label: 'Blast',
-      instruction: 'Run through cards quickly with an automatic flip timer.',
-    },
-    learn: {
-      label: 'Learn',
-      instruction: 'Mark cards as known or repeat them until you learn them.',
-    },
-    match: {
-      label: 'Match',
-      instruction: 'Match the term to the correct definition.',
-    },
-    blocks: {
-      label: 'Blocks',
-      instruction: 'Build the answer from blocks of words or letters.',
-    },
+    flashcards: { label: 'Flashcards', instruction: 'Tap the card or press Flip to reveal the answer.' },
+    learn:      { label: 'Learn',      instruction: 'Answer questions adaptively to master every card.' },
+    write:      { label: 'Write',      instruction: 'Type the definition from memory.' },
+    test:       { label: 'Test',       instruction: 'Answer a mix of question types, then submit for your score.' },
+    match:      { label: 'Match',      instruction: 'Match each term to its definition as fast as you can.' },
+    gravity:    { label: 'Gravity',    instruction: 'Type the definition before the term hits the ground.' },
+    blast:      { label: 'Blast',      instruction: 'Run through cards quickly with an automatic flip timer.' },
+    blocks:     { label: 'Blocks',     instruction: 'Build the answer from blocks of words or letters.' },
   };
 
   let currentMode = 'flashcards';
   let blastInterval = null;
   let blastFlipTimeout = null;
-  let learnQueue = [];
   let matchState = null;
+  let matchTimerInterval = null;
+  let matchTimerStart = null;
+  let learnState = null;
+  let testQuestions = [];
+  let testAnswers = {};
   let blocksState = null;
+  let gravityState = null;
+  let gravityFallTimeout = null;
 
   function normalizeText(value) {
     return value.trim().toLowerCase().replace(/\s+/g, ' ');
   }
 
   function getCurrentCard() {
-    const cards = getCurrentCards();
-    return cards[currentIndex] || null;
+    return getCurrentCards()[currentIndex] || null;
   }
 
   function renderCurrentCard() {
@@ -465,49 +503,44 @@ function setupReviewPage() {
       setText(reviewDefinition, 'Add cards first on the Add Cards page.');
       return;
     }
-
     setText(reviewTerm, card.term);
     setText(reviewDefinition, card.definition);
-    if (reviewDefinition) {
-      reviewDefinition.classList.toggle('hidden', !showingBack);
-    }
+    if (reviewDefinition) reviewDefinition.classList.toggle('hidden', !showingBack);
   }
 
   function renderModeView() {
     if (!reviewDeckTitle || !reviewInfo) return;
-
     const deck = getCurrentDeck();
     const cards = getCurrentCards();
-    const modeConfig = modeSettings[currentMode];
+    const cfg = modeSettings[currentMode];
 
-    setText(reviewDeckTitle, `${modeConfig.label} — ${deck.name}`);
-    setText(reviewInfo, `${modeConfig.instruction} (${cards.length} card${cards.length === 1 ? '' : 's'})`);
+    setText(reviewDeckTitle, `${cfg.label} — ${deck.name}`);
+    setText(reviewInfo, `${cfg.instruction} (${cards.length} card${cards.length === 1 ? '' : 's'})`);
 
-    showElement(reviewCard, currentMode !== 'match' && currentMode !== 'blocks');
+    const showCard = currentMode === 'flashcards' || currentMode === 'write' || currentMode === 'blast';
+    showElement(reviewCard, showCard);
     showElement(flipBtn, currentMode === 'flashcards');
-    showElement(shuffleBtn, currentMode === 'flashcards' || currentMode === 'learn');
-    showElement(getById('testPanel'), currentMode === 'test');
-    showElement(getById('blastPanel'), currentMode === 'blast');
-    showElement(getById('learnPanel'), currentMode === 'learn');
-    showElement(getById('matchPanel'), currentMode === 'match');
-    showElement(getById('blocksPanel'), currentMode === 'blocks');
+    showElement(shuffleBtn, currentMode === 'flashcards');
+    showElement(prevBtn, showCard);
+    showElement(nextBtn, showCard);
 
-    setText(answerResult, '');
+    showElement(getById('writePanel'),     currentMode === 'write');
+    showElement(getById('blastPanel'),     currentMode === 'blast');
+    showElement(getById('learnPanel'),     currentMode === 'learn');
+    showElement(getById('testModePanel'),  currentMode === 'test');
+    showElement(getById('matchPanel'),     currentMode === 'match');
+    showElement(getById('gravityPanel'),   currentMode === 'gravity');
+    showElement(getById('blocksPanel'),    currentMode === 'blocks');
+
+    if (answerResult) setText(answerResult, '');
     if (answerInput) answerInput.value = '';
 
-    if (currentMode === 'match') {
-      initializeMatchMode();
-    }
-
-    if (currentMode === 'blocks') {
-      initializeBlocksMode();
-    }
-
-    if (currentMode === 'learn') {
-      initializeLearnMode();
-    }
-
-    renderCurrentCard();
+    if (currentMode === 'match')   initializeMatchMode();
+    if (currentMode === 'blocks')  initializeBlocksMode();
+    if (currentMode === 'learn')   initializeLearnMode();
+    if (currentMode === 'test')    initializeTestMode();
+    if (currentMode === 'gravity') resetGravity();
+    if (showCard) renderCurrentCard();
   }
 
   function changeCard(delta) {
@@ -518,135 +551,321 @@ function setupReviewPage() {
     renderCurrentCard();
   }
 
+  // ── Blast ─────────────────────────────────────────────────────────────────
+
   function startBlast() {
-    if (blastInterval) {
-      stopBlast();
-      return;
-    }
-
-    if (getCurrentCards().length === 0) {
-      alert('Add cards before using Blast mode.');
-      return;
-    }
-
+    if (blastInterval) { stopBlast(); return; }
+    if (!getCurrentCards().length) { alert('Add cards before using Blast mode.'); return; }
     setText(getById('blastTip'), 'Blast is running. Sit back and review quickly.');
-    blastStartBtn.textContent = 'Stop Blast';
-
+    if (blastStartBtn) blastStartBtn.textContent = 'Stop Blast';
     blastInterval = setInterval(() => {
       showingBack = false;
       renderCurrentCard();
-      blastFlipTimeout = setTimeout(() => {
-        showingBack = true;
-        renderCurrentCard();
-      }, 1200);
+      blastFlipTimeout = setTimeout(() => { showingBack = true; renderCurrentCard(); }, 1200);
       setTimeout(() => changeCard(1), 2500);
     }, 3000);
   }
 
   function stopBlast() {
-    if (blastInterval) {
-      clearInterval(blastInterval);
-      blastInterval = null;
-    }
-    if (blastFlipTimeout) {
-      clearTimeout(blastFlipTimeout);
-      blastFlipTimeout = null;
-    }
+    if (blastInterval) { clearInterval(blastInterval); blastInterval = null; }
+    if (blastFlipTimeout) { clearTimeout(blastFlipTimeout); blastFlipTimeout = null; }
     setText(getById('blastTip'), 'Timed auto-review with quick flips.');
-    blastStartBtn.textContent = 'Start Blast';
+    if (blastStartBtn) blastStartBtn.textContent = 'Start Blast';
   }
+
+  // ── Learn (adaptive MC → written) ─────────────────────────────────────────
 
   function initializeLearnMode() {
     const cards = getCurrentCards();
-    if (!learnQueue.length) {
-      learnQueue = cards.map((_, index) => index);
-      currentIndex = learnQueue[0] || 0;
-    }
-    showElement(getById('learnTip'), true);
+    learnState = {
+      mcQueue: shuffle(cards.map((_, i) => i)),
+      writtenQueue: [],
+      doneSet: new Set(),
+      total: cards.length,
+    };
+    showElement(getById('learnMCSection'), true);
+    showElement(getById('learnWrittenSection'), false);
+    advanceLearning();
   }
 
-  function markKnown() {
-    if (!learnQueue.length) return;
-    learnQueue.shift();
-    if (learnQueue.length === 0) {
-      setText(getById('learnTip'), 'All cards reviewed — great job!');
+  function updateLearnProgress() {
+    const done = learnState.doneSet.size;
+    const fill = getById('learnProgressFill');
+    const text = getById('learnProgressText');
+    if (fill) fill.style.width = `${learnState.total ? (done / learnState.total) * 100 : 0}%`;
+    if (text) setText(text, `${done} of ${learnState.total} learned`);
+  }
+
+  function advanceLearning() {
+    updateLearnProgress();
+    if (!learnState.mcQueue.length && !learnState.writtenQueue.length) {
+      showElement(getById('learnMCSection'), false);
+      showElement(getById('learnWrittenSection'), false);
+      const fb = getById('learnMCFeedback');
+      if (fb) { fb.textContent = 'All cards learned — great work!'; fb.classList.remove('hidden'); }
       return;
     }
-    currentIndex = learnQueue[0];
-    showingBack = false;
-    renderCurrentCard();
+    if (learnState.mcQueue.length) {
+      showElement(getById('learnMCSection'), true);
+      showElement(getById('learnWrittenSection'), false);
+      const fb = getById('learnMCFeedback');
+      if (fb) fb.classList.add('hidden');
+      renderLearnMCCard();
+    } else {
+      showElement(getById('learnMCSection'), false);
+      showElement(getById('learnWrittenSection'), true);
+      const fb = getById('learnWrittenFeedback');
+      if (fb) fb.classList.add('hidden');
+      renderLearnWrittenCard();
+    }
   }
 
-  function reviewAgain() {
-    if (!learnQueue.length) return;
-    learnQueue.push(learnQueue.shift());
-    currentIndex = learnQueue[0];
-    showingBack = false;
-    renderCurrentCard();
+  function renderLearnMCCard() {
+    const cards = getCurrentCards();
+    const idx = learnState.mcQueue[0];
+    const card = cards[idx];
+    if (!card) return;
+    setText(getById('learnMCPrompt'), card.term);
+    const others = cards.filter((_, i) => i !== idx);
+    const options = shuffle([card.definition, ...shuffle(others).slice(0, 3).map((c) => c.definition)]);
+    const container = getById('learnMCOptions');
+    if (!container) return;
+    container.innerHTML = '';
+    options.forEach((opt) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'mc-option';
+      btn.textContent = opt;
+      btn.addEventListener('click', () => handleLearnMCAnswer(opt, card.definition, btn, container));
+      container.appendChild(btn);
+    });
   }
+
+  function handleLearnMCAnswer(selected, correct, clickedBtn, container) {
+    Array.from(container.children).forEach((b) => {
+      b.disabled = true;
+      if (b.textContent === correct) b.classList.add('correct');
+    });
+    const fb = getById('learnMCFeedback');
+    if (selected === correct) {
+      clickedBtn.classList.add('correct');
+      learnState.writtenQueue.push(learnState.mcQueue.shift());
+      if (fb) { fb.textContent = 'Correct!'; fb.classList.remove('hidden'); }
+      setTimeout(advanceLearning, 700);
+    } else {
+      clickedBtn.classList.add('incorrect');
+      if (fb) { fb.textContent = `Not quite — "${correct}" is the definition.`; fb.classList.remove('hidden'); }
+      learnState.mcQueue.push(learnState.mcQueue.shift());
+      setTimeout(advanceLearning, 1600);
+    }
+  }
+
+  function renderLearnWrittenCard() {
+    const card = getCurrentCards()[learnState.writtenQueue[0]];
+    if (!card) return;
+    setText(getById('learnWrittenPrompt'), card.term);
+    const input = getById('learnWrittenInput');
+    if (input) { input.value = ''; input.focus(); }
+    const fb = getById('learnWrittenFeedback');
+    if (fb) fb.classList.add('hidden');
+  }
+
+  function checkLearnWritten() {
+    const idx = learnState.writtenQueue[0];
+    if (idx === undefined) return;
+    const card = getCurrentCards()[idx];
+    const input = getById('learnWrittenInput');
+    const fb = getById('learnWrittenFeedback');
+    if (normalizeText(input?.value || '') === normalizeText(card.definition)) {
+      learnState.doneSet.add(learnState.writtenQueue.shift());
+      if (fb) { fb.textContent = 'Correct!'; fb.classList.remove('hidden'); }
+      setTimeout(advanceLearning, 600);
+    } else {
+      if (fb) { fb.textContent = `Not quite — the answer is: ${card.definition}`; fb.classList.remove('hidden'); }
+      learnState.mcQueue.push(learnState.writtenQueue.shift());
+      setTimeout(advanceLearning, 1600);
+    }
+  }
+
+  // ── Test (mixed question types) ───────────────────────────────────────────
+
+  function initializeTestMode() {
+    testQuestions = buildTestQuestions(getCurrentCards());
+    testAnswers = {};
+    showElement(getById('testQuestionsWrapper'), true);
+    showElement(getById('testResults'), false);
+    renderTestQuestions();
+  }
+
+  function buildTestQuestions(cards) {
+    if (!cards.length) return [];
+    const pool = shuffle(cards.map((c, i) => ({ ...c, i })));
+    const n = Math.min(20, pool.length);
+    return pool.slice(0, n).map((card) => {
+      const others = pool.filter((c) => c.i !== card.i);
+      const r = Math.random();
+      if (others.length < 3 || r > 0.65) {
+        return { type: 'written', term: card.term, answer: card.definition };
+      }
+      if (r > 0.35) {
+        const opts = shuffle([card.definition, ...shuffle(others).slice(0, 3).map((c) => c.definition)]);
+        return { type: 'mc', term: card.term, answer: card.definition, options: opts };
+      }
+      const useCorrect = Math.random() > 0.5;
+      const shownDef = useCorrect ? card.definition : (shuffle(others)[0]?.definition || card.definition);
+      return { type: 'tf', term: card.term, answer: card.definition, shownDef, isTrue: shownDef === card.definition };
+    });
+  }
+
+  function renderTestQuestions() {
+    const container = getById('testQuestions');
+    if (!container) return;
+    container.innerHTML = '';
+    testQuestions.forEach((q, i) => {
+      const div = document.createElement('div');
+      div.className = 'test-question';
+      if (q.type === 'written') {
+        div.innerHTML = `<p class="test-question-type">Written</p>
+          <p class="test-question-prompt">${sanitize(q.term)}</p>
+          <input type="text" class="test-written-input" data-qi="${i}" placeholder="Type the definition" autocomplete="off" />`;
+      } else if (q.type === 'mc') {
+        const optsHtml = q.options.map((opt) =>
+          `<button type="button" class="test-mc-option" data-qi="${i}" data-val="${sanitize(opt)}">${sanitize(opt)}</button>`
+        ).join('');
+        div.innerHTML = `<p class="test-question-type">Multiple Choice</p>
+          <p class="test-question-prompt">${sanitize(q.term)}</p>
+          <div class="test-mc-options">${optsHtml}</div>`;
+      } else {
+        div.innerHTML = `<p class="test-question-type">True / False</p>
+          <p class="test-question-prompt">"${sanitize(q.shownDef)}" is the definition of <strong>${sanitize(q.term)}</strong></p>
+          <div class="test-tf-options">
+            <button type="button" class="test-tf-btn" data-qi="${i}" data-val="true">True</button>
+            <button type="button" class="test-tf-btn" data-qi="${i}" data-val="false">False</button>
+          </div>`;
+      }
+      container.appendChild(div);
+    });
+
+    container.querySelectorAll('.test-written-input').forEach((inp) => {
+      inp.addEventListener('input', () => { testAnswers[inp.dataset.qi] = inp.value; });
+    });
+    container.querySelectorAll('.test-mc-option').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        container.querySelectorAll(`.test-mc-option[data-qi="${btn.dataset.qi}"]`).forEach((b) => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        testAnswers[btn.dataset.qi] = btn.dataset.val;
+      });
+    });
+    container.querySelectorAll('.test-tf-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        container.querySelectorAll(`.test-tf-btn[data-qi="${btn.dataset.qi}"]`).forEach((b) => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        testAnswers[btn.dataset.qi] = btn.dataset.val === 'true';
+      });
+    });
+  }
+
+  function submitTest() {
+    let correct = 0;
+    const graded = testQuestions.map((q, i) => {
+      const ans = testAnswers[i];
+      const isCorrect = q.type === 'written'
+        ? normalizeText(String(ans || '')) === normalizeText(q.answer)
+        : q.type === 'mc'
+          ? ans === q.answer
+          : ans === q.isTrue;
+      if (isCorrect) correct++;
+      return { ...q, isCorrect, userAnswer: ans };
+    });
+
+    showElement(getById('testQuestionsWrapper'), false);
+    showElement(getById('testResults'), true);
+    setText(getById('testScoreText'), `${correct} / ${graded.length} correct — ${Math.round((correct / graded.length) * 100)}%`);
+
+    const list = getById('testResultsList');
+    list.innerHTML = '';
+    graded.forEach((r) => {
+      const div = document.createElement('div');
+      div.className = 'test-question';
+      let feedback = `<p class="test-result-feedback correct">✓ Correct</p>`;
+      if (!r.isCorrect) {
+        const ua = r.type === 'tf'
+          ? (r.userAnswer === true ? 'True' : r.userAnswer === false ? 'False' : 'No answer')
+          : sanitize(String(r.userAnswer || '(no answer)'));
+        feedback = `<p class="test-result-feedback incorrect">✗ Your answer: ${ua}</p>
+                    <p class="test-result-feedback correct">Correct: ${sanitize(r.answer)}</p>`;
+      }
+      div.innerHTML = `<p class="test-question-prompt">${sanitize(r.term)}</p>${feedback}`;
+      list.appendChild(div);
+    });
+  }
+
+  // ── Match (timed) ─────────────────────────────────────────────────────────
 
   function initializeMatchMode() {
+    stopMatchTimer();
     const cards = getCurrentCards();
     const pairs = cards.map((card, index) => ({ index, term: card.term, definition: card.definition }));
-    const termOrder = shuffle(pairs);
-    const definitionOrder = shuffle(pairs);
-    matchState = {
-      pairs,
-      termOrder,
-      definitionOrder,
-      selectedTerm: null,
-      selectedDefinition: null,
-      matches: [],
-    };
+    matchState = { pairs, termOrder: shuffle(pairs), definitionOrder: shuffle(pairs), selectedTerm: null, selectedDefinition: null, matches: [], started: false };
+    setText(getById('matchTimer'), '0.0s');
+    const bestKey = `match-best-${state.selectedDeckId}`;
+    const best = localStorage.getItem(bestKey);
+    setText(getById('matchBestTime'), best ? `Best: ${best}s` : '');
     renderMatchBoard();
+  }
+
+  function startMatchTimer() {
+    if (matchState.started) return;
+    matchState.started = true;
+    matchTimerStart = Date.now();
+    matchTimerInterval = setInterval(() => {
+      setText(getById('matchTimer'), `${((Date.now() - matchTimerStart) / 1000).toFixed(1)}s`);
+    }, 100);
+  }
+
+  function stopMatchTimer() {
+    if (matchTimerInterval) { clearInterval(matchTimerInterval); matchTimerInterval = null; }
   }
 
   function renderMatchBoard() {
     if (!matchTerms || !matchDefinitions || !matchStatus) return;
     matchTerms.innerHTML = '';
     matchDefinitions.innerHTML = '';
-
     matchState.termOrder.forEach((item) => {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'match-item';
-      button.textContent = item.term;
-      button.dataset.index = String(item.index);
-      button.disabled = matchState.matches.includes(item.index);
-      button.addEventListener('click', () => selectMatchTerm(item.index, button));
-      matchTerms.appendChild(button);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'match-item';
+      btn.textContent = item.term;
+      btn.dataset.index = String(item.index);
+      btn.disabled = matchState.matches.includes(item.index);
+      btn.addEventListener('click', () => { startMatchTimer(); selectMatchTerm(item.index); });
+      matchTerms.appendChild(btn);
     });
-
     matchState.definitionOrder.forEach((item) => {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'match-item';
-      button.textContent = item.definition;
-      button.dataset.index = String(item.index);
-      button.disabled = matchState.matches.includes(item.index);
-      button.addEventListener('click', () => selectMatchDefinition(item.index, button));
-      matchDefinitions.appendChild(button);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'match-item';
+      btn.textContent = item.definition;
+      btn.dataset.index = String(item.index);
+      btn.disabled = matchState.matches.includes(item.index);
+      btn.addEventListener('click', () => { startMatchTimer(); selectMatchDefinition(item.index); });
+      matchDefinitions.appendChild(btn);
     });
-
     updateMatchStatus();
   }
 
-  function selectMatchTerm(index, button) {
+  function selectMatchTerm(index) {
     if (matchState.matches.includes(index)) return;
     matchState.selectedTerm = index;
     highlightSelected(matchTerms, index);
-    if (matchState.selectedDefinition !== null) {
-      checkMatchPair();
-    }
+    if (matchState.selectedDefinition !== null) checkMatchPair();
   }
 
-  function selectMatchDefinition(index, button) {
+  function selectMatchDefinition(index) {
     if (matchState.matches.includes(index)) return;
     matchState.selectedDefinition = index;
     highlightSelected(matchDefinitions, index);
-    if (matchState.selectedTerm !== null) {
-      checkMatchPair();
-    }
+    if (matchState.selectedTerm !== null) checkMatchPair();
   }
 
   function highlightSelected(container, selectedIndex) {
@@ -659,7 +878,21 @@ function setupReviewPage() {
     if (matchState.selectedTerm === null || matchState.selectedDefinition === null) return;
     if (matchState.selectedTerm === matchState.selectedDefinition) {
       matchState.matches.push(matchState.selectedTerm);
-      setText(matchStatus, 'Correct match! Keep going.');
+      if (matchState.matches.length === matchState.pairs.length) {
+        stopMatchTimer();
+        const elapsed = ((Date.now() - matchTimerStart) / 1000).toFixed(1);
+        const bestKey = `match-best-${state.selectedDeckId}`;
+        const prev = parseFloat(localStorage.getItem(bestKey) || 'Infinity');
+        if (parseFloat(elapsed) < prev) {
+          localStorage.setItem(bestKey, elapsed);
+          setText(getById('matchBestTime'), `New best: ${elapsed}s!`);
+        } else {
+          setText(getById('matchBestTime'), `Best: ${prev}s`);
+        }
+        setText(matchStatus, `Done in ${elapsed}s — all matched!`);
+        return;
+      }
+      setText(matchStatus, 'Correct!');
     } else {
       setText(matchStatus, 'Not a match. Try again.');
     }
@@ -671,18 +904,106 @@ function setupReviewPage() {
   function updateMatchStatus() {
     if (!matchStatus) return;
     const remaining = getCurrentCards().length - matchState.matches.length;
-    setText(matchStatus, `${remaining} card${remaining === 1 ? '' : 's'} left.`);
+    setText(matchStatus, `${remaining} pair${remaining === 1 ? '' : 's'} left.`);
   }
+
+  // ── Gravity ───────────────────────────────────────────────────────────────
+
+  function resetGravity() {
+    stopGravity();
+    gravityState = null;
+    const termEl = getById('gravityTerm');
+    if (termEl) { termEl.textContent = ''; termEl.className = 'gravity-term'; }
+    setText(getById('gravityScore'), '0');
+    setText(getById('gravityLives'), '♥♥♥');
+    const fb = getById('gravityFeedback');
+    if (fb) fb.classList.add('hidden');
+    const input = getById('gravityInput');
+    if (input) { input.value = ''; input.disabled = true; }
+    const startBtn = getById('gravityStartBtn');
+    if (startBtn) startBtn.textContent = 'Start Gravity';
+    showElement(getById('gravityStartScreen'), true);
+  }
+
+  function startGravity() {
+    const cards = getCurrentCards();
+    if (!cards.length) { alert('Add cards before playing Gravity.'); return; }
+    showElement(getById('gravityStartScreen'), false);
+    const fb = getById('gravityFeedback');
+    if (fb) fb.classList.add('hidden');
+    gravityState = { deck: shuffle([...cards]), pos: 0, score: 0, lives: 3, duration: 8000, active: true, current: null };
+    const input = getById('gravityInput');
+    if (input) { input.disabled = false; input.value = ''; input.focus(); }
+    dropTerm();
+  }
+
+  function stopGravity() {
+    if (gravityFallTimeout) { clearTimeout(gravityFallTimeout); gravityFallTimeout = null; }
+  }
+
+  function dropTerm() {
+    if (!gravityState?.active) return;
+    if (gravityState.pos >= gravityState.deck.length) {
+      gravityState.deck = shuffle([...getCurrentCards()]);
+      gravityState.pos = 0;
+    }
+    gravityState.current = gravityState.deck[gravityState.pos++];
+    const termEl = getById('gravityTerm');
+    if (termEl) {
+      termEl.textContent = gravityState.current.term;
+      termEl.className = 'gravity-term';
+      termEl.offsetHeight;
+      termEl.style.animationDuration = `${gravityState.duration}ms`;
+      termEl.classList.add('falling');
+    }
+    const input = getById('gravityInput');
+    if (input) input.value = '';
+    const fb = getById('gravityFeedback');
+    if (fb) fb.classList.add('hidden');
+    gravityFallTimeout = setTimeout(termMissed, gravityState.duration);
+  }
+
+  function checkGravityInput() {
+    if (!gravityState?.active || !gravityState.current) return;
+    const input = getById('gravityInput');
+    if (normalizeText(input?.value || '') !== normalizeText(gravityState.current.definition)) return;
+    stopGravity();
+    gravityState.score++;
+    gravityState.duration = Math.max(3000, gravityState.duration - 300);
+    setText(getById('gravityScore'), String(gravityState.score));
+    const termEl = getById('gravityTerm');
+    if (termEl) { termEl.className = 'gravity-term cleared'; }
+    setTimeout(dropTerm, 400);
+  }
+
+  function termMissed() {
+    if (!gravityState?.active) return;
+    gravityState.lives--;
+    const termEl = getById('gravityTerm');
+    if (termEl) termEl.classList.add('hit');
+    const fb = getById('gravityFeedback');
+    if (fb) { fb.textContent = `Missed! Answer: ${gravityState.current?.definition || ''}`; fb.classList.remove('hidden'); }
+    setText(getById('gravityLives'), '♥'.repeat(gravityState.lives) + '♡'.repeat(3 - gravityState.lives));
+    if (gravityState.lives <= 0) {
+      gravityState.active = false;
+      if (fb) fb.textContent = `Game over! Final score: ${gravityState.score}`;
+      const input = getById('gravityInput');
+      if (input) input.disabled = true;
+      const startBtn = getById('gravityStartBtn');
+      if (startBtn) startBtn.textContent = 'Play again';
+      showElement(getById('gravityStartScreen'), true);
+    } else {
+      setTimeout(dropTerm, 1200);
+    }
+  }
+
+  // ── Blocks ────────────────────────────────────────────────────────────────
 
   function initializeBlocksMode() {
     const card = getCurrentCard();
     const text = card ? card.definition : '';
     const fragments = text.split(/\s+/).filter(Boolean);
-    blocksState = {
-      answer: text.trim(),
-      fragments: shuffle(fragments),
-      selection: [],
-    };
+    blocksState = { answer: text.trim(), fragments: shuffle(fragments), selection: [] };
     renderBlocksBoard();
     setText(blocksResult, '');
   }
@@ -690,54 +1011,39 @@ function setupReviewPage() {
   function renderBlocksBoard() {
     if (!blocksBoard) return;
     blocksBoard.innerHTML = '';
-    const current = blocksState.selection.join(' ');
     const selectionNode = document.createElement('div');
     selectionNode.className = 'blocks-selection';
-    selectionNode.textContent = current || 'Build the answer here.';
+    selectionNode.textContent = blocksState.selection.join(' ') || 'Build the answer here.';
     blocksBoard.appendChild(selectionNode);
-
     const grid = document.createElement('div');
     grid.className = 'blocks-fragments';
-    blocksState.fragments.forEach((fragment, index) => {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'block-fragment';
-      button.textContent = fragment;
-      button.disabled = blocksState.selection.includes(fragment) && blocksState.fragments.filter((x) => x === fragment).length <= blocksState.selection.filter((x) => x === fragment).length;
-      button.addEventListener('click', () => {
-        blocksState.selection.push(fragment);
-        renderBlocksBoard();
-      });
-      grid.appendChild(button);
+    blocksState.fragments.forEach((fragment) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'block-fragment';
+      btn.textContent = fragment;
+      btn.disabled = blocksState.selection.filter((x) => x === fragment).length >= blocksState.fragments.filter((x) => x === fragment).length;
+      btn.addEventListener('click', () => { blocksState.selection.push(fragment); renderBlocksBoard(); });
+      grid.appendChild(btn);
     });
     blocksBoard.appendChild(grid);
   }
 
-  function submitBlocksAnswer() {
-    const guess = normalizeText(blocksState.selection.join(' '));
-    if (guess === normalizeText(blocksState.answer)) {
-      setText(blocksResult, 'Correct! Great work.');
-    } else {
-      setText(blocksResult, 'Not quite. Try rearranging the blocks.');
-    }
-  }
-
-  function clearBlocksSelection() {
-    blocksState.selection = [];
-    renderBlocksBoard();
-    setText(blocksResult, '');
-  }
+  // ── Mode switching ────────────────────────────────────────────────────────
 
   function setReviewMode(mode) {
     currentMode = mode;
+    document.querySelectorAll('.mode-btn').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.mode === mode);
+    });
     showingBack = false;
     stopBlast();
-    if (mode === 'learn') {
-      learnQueue = [];
-      initializeLearnMode();
-    }
+    stopGravity();
+    stopMatchTimer();
     renderModeView();
   }
+
+  // ── Event listeners ───────────────────────────────────────────────────────
 
   if (deckSelect) {
     deckSelect.addEventListener('change', () => {
@@ -747,52 +1053,26 @@ function setupReviewPage() {
       renderModeView();
     });
   }
+  document.querySelectorAll('.mode-btn').forEach((btn) => {
+    btn.addEventListener('click', () => setReviewMode(btn.dataset.mode));
+  });
 
-  if (modeSelect) {
-    modeSelect.addEventListener('change', () => {
-      setReviewMode(modeSelect.value);
+  if (reviewCard) {
+    reviewCard.addEventListener('click', () => { if (currentMode === 'flashcards') { showingBack = !showingBack; renderCurrentCard(); } });
+    reviewCard.addEventListener('keydown', (e) => {
+      if ((e.key === 'Enter' || e.key === ' ') && currentMode === 'flashcards') { e.preventDefault(); showingBack = !showingBack; renderCurrentCard(); }
     });
   }
-
-  if (flipBtn) {
-    flipBtn.addEventListener('click', () => {
-      showingBack = !showingBack;
-      renderCurrentCard();
-    });
-  }
-
-  if (nextBtn) {
-    nextBtn.addEventListener('click', () => {
-      changeCard(1);
-      if (currentMode === 'learn') {
-        initializeLearnMode();
-      }
-    });
-  }
-
-  if (prevBtn) {
-    prevBtn.addEventListener('click', () => {
-      changeCard(-1);
-      if (currentMode === 'learn') {
-        initializeLearnMode();
-      }
-    });
-  }
+  if (flipBtn) flipBtn.addEventListener('click', () => { showingBack = !showingBack; renderCurrentCard(); });
+  if (prevBtn) prevBtn.addEventListener('click', () => changeCard(-1));
+  if (nextBtn) nextBtn.addEventListener('click', () => changeCard(1));
 
   if (shuffleBtn) {
     shuffleBtn.addEventListener('click', () => {
-      if (currentMode === 'learn') {
-        learnQueue = shuffle(learnQueue);
-      } else {
-        const cards = getCurrentCards();
-        if (!cards.length) return;
-        state.decks = state.decks.map((deck) =>
-          deck.id === state.selectedDeckId
-            ? { ...deck, cards: shuffle(deck.cards) }
-            : deck
-        );
-        saveState();
-      }
+      const cards = getCurrentCards();
+      if (!cards.length) return;
+      state.decks = state.decks.map((d) => d.id === state.selectedDeckId ? { ...d, cards: shuffle(d.cards) } : d);
+      saveState();
       renderModeView();
     });
   }
@@ -801,46 +1081,37 @@ function setupReviewPage() {
     checkAnswerBtn.addEventListener('click', () => {
       const card = getCurrentCard();
       if (!card || !answerInput) return;
-      const guess = normalizeText(answerInput.value);
-      const expected = normalizeText(card.definition);
-      if (guess === expected) {
-        setText(answerResult, 'Correct!');
-      } else {
-        setText(answerResult, `Not quite. The answer is: ${card.definition}`);
-      }
+      const correct = normalizeText(answerInput.value) === normalizeText(card.definition);
+      setText(answerResult, correct ? 'Correct!' : `Not quite. The answer is: ${card.definition}`);
     });
   }
+  if (answerInput) answerInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') checkAnswerBtn?.click(); });
 
-  if (blastStartBtn) {
-    blastStartBtn.addEventListener('click', () => {
-      if (blastInterval) {
-        stopBlast();
-      } else {
-        startBlast();
-      }
-    });
-  }
+  if (blastStartBtn) blastStartBtn.addEventListener('click', () => (blastInterval ? stopBlast() : startBlast()));
 
-  if (learnKnowBtn) {
-    learnKnowBtn.addEventListener('click', markKnown);
-  }
+  const learnSubmitBtn = getById('learnSubmitBtn');
+  if (learnSubmitBtn) learnSubmitBtn.addEventListener('click', checkLearnWritten);
+  const learnWrittenInput = getById('learnWrittenInput');
+  if (learnWrittenInput) learnWrittenInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') checkLearnWritten(); });
 
-  if (learnAgainBtn) {
-    learnAgainBtn.addEventListener('click', reviewAgain);
-  }
+  const testSubmitBtn = getById('testSubmitBtn');
+  if (testSubmitBtn) testSubmitBtn.addEventListener('click', submitTest);
+  const testRetryBtn = getById('testRetryBtn');
+  if (testRetryBtn) testRetryBtn.addEventListener('click', initializeTestMode);
+
+  const gravityStartBtn = getById('gravityStartBtn');
+  if (gravityStartBtn) gravityStartBtn.addEventListener('click', startGravity);
+  const gravityInput = getById('gravityInput');
+  if (gravityInput) gravityInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') checkGravityInput(); });
 
   if (blocksSubmitBtn) {
-    blocksSubmitBtn.addEventListener('click', submitBlocksAnswer);
+    blocksSubmitBtn.addEventListener('click', () => {
+      const guess = normalizeText(blocksState.selection.join(' '));
+      setText(blocksResult, guess === normalizeText(blocksState.answer) ? 'Correct! Great work.' : 'Not quite. Try rearranging the blocks.');
+    });
   }
-
   if (blocksClearBtn) {
-    blocksClearBtn.addEventListener('click', clearBlocksSelection);
-  }
-
-  const cards = getCurrentCards();
-  if (!cards.length) {
-    setText(reviewTerm, 'No cards available');
-    setText(reviewDefinition, 'Add cards first on the Add Cards page.');
+    blocksClearBtn.addEventListener('click', () => { blocksState.selection = []; renderBlocksBoard(); setText(blocksResult, ''); });
   }
 
   setReviewMode('flashcards');
@@ -860,6 +1131,7 @@ function importCardsFromFile(file, callback) {
       } else if (imported && Array.isArray(imported.decks)) {
         importedDecks = imported.decks.map((deck) => ({
           id: generateId(),
+          parseId: null,
           name: typeof deck.name === 'string' && deck.name.trim() ? deck.name.trim() : DEFAULT_DECK_NAME,
           cards: Array.isArray(deck.cards)
             ? deck.cards.filter(isValidCard).map((item) => ({ term: item.term.trim(), definition: item.definition.trim() }))

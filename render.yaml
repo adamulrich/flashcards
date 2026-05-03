@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: flashcards
+    env: static
+    buildCommand: ""
+    staticPublishPath: .
+    headers:
+      - path: /service-worker.js
+        name: Cache-Control
+        value: no-cache, no-store, must-revalidate
+      - path: /manifest.webmanifest
+        name: Cache-Control
+        value: no-cache

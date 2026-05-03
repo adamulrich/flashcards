@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy &amp; Data Retention — Flashcards</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#4338ca" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Flashcards" />
+  <link rel="apple-touch-icon" href="icon.svg" />
+</head>
+<body data-page="privacy">
+  <div class="app-shell">
+    <header class="app-bar">
+      <span class="app-bar-brand">Flashcards</span>
+      <nav class="app-bar-nav" aria-label="App navigation">
+        <a href="index.html" class="app-bar-link">✏️ Add cards</a>
+        <a href="review.html" class="app-bar-link">📖 Review</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="panel policy-content">
+        <h1>Privacy &amp; Data Retention Policy</h1>
+        <p class="policy-updated">Last updated: <time datetime="2026-05-02">2 May 2026</time></p>
+
+        <p>This policy explains what data the Flashcards app collects, how it is stored, how long it is kept, and what rights you have over it. The app is a personal study tool — it does not require an account and does not collect personal information about you.</p>
+
+        <h2>1. What data we store</h2>
+        <p>The only data stored by this app is the content you create:</p>
+        <ul>
+          <li>Deck names</li>
+          <li>Flashcard terms and definitions</li>
+        </ul>
+        <p>No name, email address, IP address, device identifier, or any other personal information is collected or stored by the app itself. If you choose to include personal information inside a flashcard (for example, as part of a term or definition), that content will be stored along with the rest of your deck.</p>
+
+        <h2>2. How data is stored</h2>
+
+        <h3>Local storage (browser)</h3>
+        <p>All deck and card data is saved in your browser's <code>localStorage</code> under the key <code>flashcards-data-v1</code>. This data stays on your device and is not transmitted anywhere unless the cloud sync feature is active. You can clear it at any time through your browser's site data settings or by deleting all decks in the app.</p>
+
+        <h3>Cloud sync (Back4App)</h3>
+        <p>When a Back4App connection is configured, your decks are synchronised to Back4App's cloud database. Back4App is a Backend-as-a-Service platform built on the open-source Parse Platform. Data is stored on Back4App's infrastructure. Back4App's own privacy policy applies to data held on their servers: <a href="https://www.back4app.com/privacy" target="_blank" rel="noopener noreferrer">back4app.com/privacy</a>.</p>
+        <p>Cloud sync only runs while the app is open and a network connection is available. If Back4App is unreachable the app continues to work using local storage only.</p>
+
+        <h2>3. Cookies and tracking</h2>
+        <p>This app does not use cookies, does not include any analytics scripts, and does not track your behaviour or usage patterns. No data is shared with advertisers or third parties beyond what is described in section 2.</p>
+
+        <h2>4. Data retention</h2>
+        <table class="policy-table">
+          <thead>
+            <tr>
+              <th>Where</th>
+              <th>Retained until</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Browser localStorage</td>
+              <td>You clear your browser's site data, or you delete all decks in the app</td>
+            </tr>
+            <tr>
+              <td>Back4App cloud</td>
+              <td>You delete the deck in the app (which removes it from the cloud), or you request full deletion (see section 5)</td>
+            </tr>
+          </tbody>
+        </table>
+        <p>There is no automatic expiry. Data is kept indefinitely until you delete it.</p>
+
+        <h2>5. Your rights and how to delete your data</h2>
+        <p>You can delete any deck — and all cards within it — at any time using the <strong>Delete deck</strong> button on the Add cards page. This removes the data from both local storage and Back4App simultaneously.</p>
+        <p>To remove all local data at once, clear your browser's site data for this app (browser Settings → Privacy → Site data).</p>
+        <p>If you need confirmation that your data has been removed from Back4App, or if you have any other data-related request, contact the app owner directly.</p>
+
+        <h2>6. Children</h2>
+        <p>This app does not knowingly collect data from children under the age of 13. The app contains no registration flow, so no age verification is performed. If you believe a child has entered personal information into a flashcard, you can delete that deck using the instructions above.</p>
+
+        <h2>7. Changes to this policy</h2>
+        <p>If this policy changes materially, the "Last updated" date at the top of the page will be revised. Continued use of the app after a change constitutes acceptance of the updated policy.</p>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p><a href="privacy.html">Privacy &amp; Data Retention</a> · Syncs to Back4App when online.</p>
+    </footer>
+  </div>
+</body>
+</html>

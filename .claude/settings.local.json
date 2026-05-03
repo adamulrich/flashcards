@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"d:\\\\repo\\\\flashcards\" -Recurse -Force)",
+      "Bash(Select-Object -Property FullName, Mode)",
+      "Bash(Format-Table -AutoSize)",
+      "Bash(find d:\\\\\\\\repo\\\\\\\\flashcards -type f -o -type d)",
+      "Bash(Remove-Item \"d:\\\\repo\\\\flashcards\\\\server.js\")",
+      "PowerShell(Remove-Item \"d:\\\\repo\\\\flashcards\\\\server.js\" -Confirm:$false)"
+    ]
+  }
+}

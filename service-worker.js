@@ -1,8 +1,9 @@
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v3';
 const CACHE_NAME = `flashcards-cache-${CACHE_VERSION}`;
 const OFFLINE_ASSETS = [
   './index.html',
   './review.html',
+  './privacy.html',
   './styles.css',
   './app.js',
   './manifest.webmanifest',
@@ -10,6 +11,7 @@ const OFFLINE_ASSETS = [
 ];
 
 self.addEventListener('install', (event) => {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(OFFLINE_ASSETS))
   );
@@ -17,13 +19,11 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys
-          .filter((key) => key !== CACHE_NAME)
-          .map((key) => caches.delete(key))
+    caches.keys()
+      .then((keys) =>
+        Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))
       )
-    )
+      .then(() => self.clients.claim())
   );
 });
 

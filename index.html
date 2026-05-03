@@ -3,26 +3,24 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Flashcards — Add Cards</title>
+  <title>Flashcards</title>
   <link rel="stylesheet" href="styles.css" />
   <link rel="icon" href="icon.svg" type="image/svg+xml" />
   <link rel="manifest" href="manifest.webmanifest" />
   <meta name="theme-color" content="#4338ca" />
+  <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Flashcards" />
+  <link rel="apple-touch-icon" href="icon.svg" />
 </head>
 <body data-page="entry">
   <div class="app-shell">
-    <header class="hero">
-      <div>
-        <p class="eyebrow">Flashcards</p>
-        <h1>Build and review cards anywhere</h1>
-        <p>Create one flashcard at a time, then review or export them to another device.</p>
-      </div>
-      <nav aria-label="App navigation" class="nav-actions">
-        <a href="index.html" class="secondary nav-link">Add cards</a>
-        <a href="review.html" class="secondary nav-link">Review cards</a>
+    <header class="app-bar">
+      <span class="app-bar-brand">Flashcards</span>
+      <nav class="app-bar-nav" aria-label="App navigation">
+        <a href="index.html" class="app-bar-link">✏️ Add cards</a>
+        <a href="review.html" class="app-bar-link">📖 Review</a>
       </nav>
     </header>
 
@@ -74,9 +72,15 @@
     </main>
 
     <footer class="footer">
-      <p>Saved locally in your browser. Export to move cards between devices.</p>
+      <p>Syncs to Back4App when online. Export JSON to share decks. · <a href="privacy.html">Privacy &amp; Data Retention</a></p>
     </footer>
   </div>
+  <script src="https://unpkg.com/parse/dist/parse.min.js"></script>
   <script src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js'));
+    }
+  </script>
 </body>
 </html>
