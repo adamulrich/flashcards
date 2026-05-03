@@ -92,32 +92,35 @@ textarea {
   margin-bottom: 12px;
 }
 
-.login-card-tagline {
-  color: #64748b;
+.login-input {
+  display: block;
+  width: 100%;
+  padding: 11px 14px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
   font-size: 0.95rem;
-  margin: 0 0 28px;
+  margin-bottom: 10px;
+  background: #f8fafc;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
 }
 
-.auth-login-btn {
-  padding: 7px 14px;
-  background: #1877f2;
-  color: #fff;
-  border: none;
-  border-radius: 10px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.15s;
+.login-input:focus {
+  outline: none;
+  border-color: #4338ca;
+  background: #fff;
 }
 
-.auth-login-btn:hover {
-  background: #1666d6;
+.login-submit-btn {
+  width: 100%;
+  margin-top: 4px;
 }
 
-.auth-login-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+.login-error {
+  color: #dc2626;
+  font-size: 0.85rem;
+  margin: 8px 0 0;
+  text-align: center;
 }
 
 .auth-user {

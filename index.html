@@ -33,8 +33,10 @@
     <div id="loginScreen" class="login-screen">
       <div class="login-card">
         <div class="login-card-logo">Flashcards</div>
-        <p class="login-card-tagline">Sign in to save and sync your decks across devices.</p>
-        <button type="button" id="loginScreenBtn" class="auth-login-btn">Sign in with Facebook</button>
+        <input type="text" id="loginUsername" class="login-input" placeholder="Username" autocomplete="username" />
+        <input type="password" id="loginPassword" class="login-input" placeholder="Password" autocomplete="current-password" />
+        <button type="button" id="loginSubmitBtn" class="primary login-submit-btn">Sign in</button>
+        <p id="loginError" class="login-error hidden"></p>
       </div>
     </div>
 

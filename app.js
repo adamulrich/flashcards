@@ -7,7 +7,6 @@ const PARSE_JS_KEY = 'kEF8693hhSC0F9M8H0dpUhWpOVYDrJoPuCVadDcw';
 
 
 const PARSE_SERVER_URL = 'https://parseapi.back4app.com';
-const FACEBOOK_APP_ID = '1486276799536861'; 
 
 let state = {
   decks: [],
@@ -16,7 +15,6 @@ let state = {
 let currentIndex = 0;
 let showingBack = false;
 let serverAvailable = false;
-let fbSDKPromise = null;
 
 function generateId() {
   return `deck-${Math.random().toString(36).slice(2, 10)}`;
@@ -255,56 +253,33 @@ function getById(id) {
   return document.getElementById(id);
 }
 
-function loadFacebookSDK() {
-  if (fbSDKPromise) return fbSDKPromise;
-  fbSDKPromise = new Promise((resolve) => {
-    if (window.FB) { resolve(); return; }
-    window.fbAsyncInit = () => {
-      FB.init({ appId: FACEBOOK_APP_ID, cookie: true, xfbml: false, version: 'v19.0' });
-      resolve();
-    };
-    const script = document.createElement('script');
-    script.src = 'https://connect.facebook.net/en_US/sdk.js';
-    script.async = true;
-    document.head.appendChild(script);
-  });
-  return fbSDKPromise;
+async function afterLogin() {
+  await saveToServer();
+  await loadServerState();
+  updateDeckOptions();
+  updateUserUI();
+  if (document.body.dataset.page === 'entry') setupEntryPage();
+  else if (document.body.dataset.page === 'review') setupReviewPage();
 }
 
-async function loginWithFacebook() {
-  const loginBtn = getById('loginBtn');
-  if (loginBtn) loginBtn.disabled = true;
+async function signIn() {
+  const username = getById('loginUsername')?.value.trim();
+  const password = getById('loginPassword')?.value;
+  const errorEl = getById('loginError');
+  if (!username || !password) return;
+  showElement(errorEl, false);
+  const btn = getById('loginSubmitBtn');
+  if (btn) btn.disabled = true;
   try {
-    await loadFacebookSDK();
-    const authResponse = await new Promise((resolve, reject) => {
-      FB.login((response) => {
-        if (response.authResponse) resolve(response.authResponse);
-        else reject(new Error('cancelled'));
-      }, { scope: 'public_profile' });
-    });
-    const authData = { id: authResponse.userID, access_token: authResponse.accessToken };
-    const user = new Parse.User();
-    await user.linkWith('facebook', { authData });
-    const me = await new Promise((resolve) => FB.api('/me', { fields: 'name' }, resolve));
-    if (me?.name) {
-      user.set('displayName', me.name);
-      await user.save();
-    }
-    await saveToServer();
-    await loadServerState();
-    updateDeckOptions();
-    updateUserUI();
-    if (document.body.dataset.page === 'entry') setupEntryPage();
-    else if (document.body.dataset.page === 'review') setupReviewPage();
+    await Parse.User.logIn(username, password);
+    await afterLogin();
   } catch (err) {
-    if (err.message !== 'cancelled') {
-      console.error('Facebook login failed', err);
-      alert('Sign in failed. Please try again.');
-    }
+    if (errorEl) { setText(errorEl, err.message || 'Sign in failed.'); showElement(errorEl, true); }
   } finally {
-    if (loginBtn) loginBtn.disabled = false;
+    if (btn) btn.disabled = false;
   }
 }
+
 
 async function logOut() {
   try {
@@ -323,7 +298,7 @@ function updateUserUI() {
 
   if (user) {
     showElement(userInfo, true);
-    if (userName) setText(userName, user.get('displayName') || 'Signed in');
+    if (userName) setText(userName, user.get('username') || 'Signed in');
     showElement(loginScreen, false);
     showElement(mainContent, true);
   } else {
@@ -335,17 +310,21 @@ function updateUserUI() {
 
 async function pageSetup() {
   await checkServerAvailability();
-  loadFacebookSDK(); // pre-load so FB.login fires synchronously on click
   if (Parse.User.current()) {
     await loadServerState();
     updateDeckOptions();
   }
   updateUserUI();
 
-  const loginScreenBtn = getById('loginScreenBtn');
   const logoutBtn = getById('logoutBtn');
-  if (loginScreenBtn) loginScreenBtn.addEventListener('click', loginWithFacebook);
   if (logoutBtn) logoutBtn.addEventListener('click', logOut);
+
+  // Login form
+  const loginSubmitBtn = getById('loginSubmitBtn');
+  const loginPassword = getById('loginPassword');
+  if (loginSubmitBtn) loginSubmitBtn.addEventListener('click', signIn);
+  if (loginPassword) loginPassword.addEventListener('keydown', (e) => { if (e.key === 'Enter') signIn(); });
+
 
   if (document.body.dataset.page === 'entry') {
     setupEntryPage();
