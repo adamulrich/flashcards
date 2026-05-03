@@ -310,14 +310,6 @@ async function loginWithFacebook() {
 
 async function logOut() {
   try {
-    if (window.FB && fbSDKPromise) {
-      const status = await new Promise((resolve) => FB.getLoginStatus(resolve));
-      if (status.status === 'connected') {
-        await new Promise((resolve) => FB.logout(resolve));
-      }
-    }
-  } catch (e) { /* ignore */ }
-  try {
     await Parse.User.logOut();
   } catch (e) { console.warn('Parse logout error', e); }
   localStorage.removeItem(STORAGE_KEY);
