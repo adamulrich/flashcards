@@ -402,6 +402,9 @@ function setupEntryPage() {
   const newDeckName = getById('newDeckName');
   const confirmNewDeckBtn = getById('confirmNewDeckBtn');
   const cancelNewDeckBtn = getById('cancelNewDeckBtn');
+  const renameDeckBtn = getById('renameDeckBtn');
+
+  let newDeckMode = 'add'; // 'add' | 'rename'
   const submitBtn = cardForm?.querySelector('button[type="submit"]');
 
   let editingIndex = null;
@@ -551,36 +554,50 @@ function setupEntryPage() {
     });
   }
 
-  function openNewDeckRow() {
-    if (newDeckRow) {
-      showElement(newDeckRow, true);
-      if (newDeckName) {
-        newDeckName.value = '';
-        newDeckName.focus();
-      }
+  function openNewDeckRow(mode = 'add') {
+    newDeckMode = mode;
+    if (confirmNewDeckBtn) confirmNewDeckBtn.textContent = mode === 'rename' ? 'Rename' : 'Add';
+    if (newDeckName) {
+      newDeckName.placeholder = mode === 'rename' ? 'New deck name' : 'Deck name';
+      newDeckName.value = mode === 'rename' ? (getCurrentDeck()?.name || '') : '';
+      newDeckName.select();
     }
+    showElement(newDeckRow, true);
+    newDeckName?.focus();
   }
 
   function closeNewDeckRow() {
     showElement(newDeckRow, false);
     if (newDeckName) newDeckName.value = '';
+    if (confirmNewDeckBtn) confirmNewDeckBtn.textContent = 'Add';
   }
 
   function commitNewDeck() {
     const name = newDeckName?.value.trim();
     if (!name) { newDeckName?.focus(); return; }
-    const deck = createDeck(name);
-    state.decks.push(deck);
-    state.selectedDeckId = deck.id;
-    currentIndex = 0;
-    saveState();
-    updateDeckOptions();
-    updateEntryCardCount();
-    renderCardList();
+    if (newDeckMode === 'rename') {
+      const deck = getCurrentDeck();
+      if (deck) {
+        deck.name = name;
+        saveState();
+        updateDeckOptions();
+        updateEntryCardCount();
+      }
+    } else {
+      const deck = createDeck(name);
+      state.decks.push(deck);
+      state.selectedDeckId = deck.id;
+      currentIndex = 0;
+      saveState();
+      updateDeckOptions();
+      updateEntryCardCount();
+      renderCardList();
+    }
     closeNewDeckRow();
   }
 
-  if (addDeckBtn) addDeckBtn.addEventListener('click', openNewDeckRow);
+  if (addDeckBtn) addDeckBtn.addEventListener('click', () => openNewDeckRow('add'));
+  if (renameDeckBtn) renameDeckBtn.addEventListener('click', () => openNewDeckRow('rename'));
   if (confirmNewDeckBtn) confirmNewDeckBtn.addEventListener('click', commitNewDeck);
   if (cancelNewDeckBtn) cancelNewDeckBtn.addEventListener('click', closeNewDeckRow);
   if (newDeckName) {
@@ -1171,10 +1188,12 @@ function setupReviewPage() {
   // ── Blocks ────────────────────────────────────────────────────────────────
 
   function initializeBlocksMode() {
+    const cards = getCurrentCards();
     const card = getCurrentCard();
     const text = card ? card.definition : '';
     const fragments = text.split(/\s+/).filter(Boolean);
-    blocksState = { answer: text.trim(), fragments: shuffle(fragments), selection: [] };
+    const completed = blocksState?.completed || 0;
+    blocksState = { answer: text.trim(), fragments: shuffle(fragments), selection: [], completed, total: cards.length };
     renderBlocksBoard();
     setText(blocksResult, '');
   }
@@ -1182,9 +1201,20 @@ function setupReviewPage() {
   function renderBlocksBoard() {
     if (!blocksBoard) return;
     blocksBoard.innerHTML = '';
+    const card = getCurrentCard();
+    if (card) {
+      const prompt = document.createElement('p');
+      prompt.className = 'blocks-prompt';
+      prompt.textContent = card.term;
+      blocksBoard.appendChild(prompt);
+    }
+    const progress = document.createElement('p');
+    progress.className = 'blocks-progress';
+    progress.textContent = `Card ${blocksState.completed + 1} of ${blocksState.total}`;
+    blocksBoard.appendChild(progress);
     const selectionNode = document.createElement('div');
     selectionNode.className = 'blocks-selection';
-    selectionNode.textContent = blocksState.selection.join(' ') || 'Build the answer here.';
+    selectionNode.textContent = blocksState.selection.join(' ') || 'Build the answer here…';
     blocksBoard.appendChild(selectionNode);
     const grid = document.createElement('div');
     grid.className = 'blocks-fragments';
@@ -1278,7 +1308,17 @@ function setupReviewPage() {
   if (blocksSubmitBtn) {
     blocksSubmitBtn.addEventListener('click', () => {
       const guess = normalizeText(blocksState.selection.join(' '));
-      setText(blocksResult, guess === normalizeText(blocksState.answer) ? 'Correct! Great work.' : 'Not quite. Try rearranging the blocks.');
+      if (guess === normalizeText(blocksState.answer)) {
+        blocksState.completed++;
+        if (blocksState.completed >= blocksState.total) {
+          setText(blocksResult, `All ${blocksState.total} cards complete — great work!`);
+        } else {
+          setText(blocksResult, 'Correct!');
+          setTimeout(() => { changeCard(1); initializeBlocksMode(); }, 700);
+        }
+      } else {
+        setText(blocksResult, 'Not quite. Try rearranging the blocks.');
+      }
     });
   }
   if (blocksClearBtn) {
