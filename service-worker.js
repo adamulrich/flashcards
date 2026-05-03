@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v4';
+const CACHE_VERSION = 'v5';
 const CACHE_NAME = `flashcards-cache-${CACHE_VERSION}`;
 const OFFLINE_ASSETS = [
   './index.html',
