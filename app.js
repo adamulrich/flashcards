@@ -92,7 +92,7 @@ function normalizeState(raw) {
   };
 }
 
-async function checkServerAvailability() {
+function initParse() {
   if (typeof Parse === 'undefined') { serverAvailable = false; return; }
   try {
     Parse.initialize(PARSE_APP_ID, PARSE_JS_KEY);
@@ -309,12 +309,13 @@ function updateUserUI() {
 }
 
 async function pageSetup() {
-  await checkServerAvailability();
+  initParse();
+  updateUserUI(); // show correct state immediately using cached session — no flash
   if (Parse.User.current()) {
     await loadServerState();
     updateDeckOptions();
+    updateUserUI();
   }
-  updateUserUI();
 
   const logoutBtn = getById('logoutBtn');
   if (logoutBtn) logoutBtn.addEventListener('click', logOut);
@@ -377,9 +378,28 @@ function setupEntryPage() {
     if (submitBtn) submitBtn.textContent = 'Save card';
   }
 
+  function refreshNoDeckState() {
+    const hasDeck = state.decks.length > 0;
+    if (cardForm) {
+      Array.from(cardForm.elements).forEach((el) => { el.disabled = !hasDeck; });
+    }
+    if (cardFormPanel) {
+      const existing = cardFormPanel.querySelector('.no-deck-notice');
+      if (!hasDeck && !existing) {
+        const notice = document.createElement('p');
+        notice.className = 'no-deck-notice empty-state';
+        notice.textContent = 'Create a deck first using "+ Add deck" below.';
+        cardFormPanel.insertBefore(notice, cardForm);
+      } else if (hasDeck && existing) {
+        existing.remove();
+      }
+    }
+  }
+
   function updateEntryCardCount() {
     if (!cardCount) return;
     const deck = getCurrentDeck();
+    if (!deck) { cardCount.textContent = ''; return; }
     const count = deck.cards.length;
     cardCount.textContent = `${count} card${count === 1 ? '' : 's'} saved in "${deck.name}"`;
   }
@@ -388,6 +408,11 @@ function setupEntryPage() {
     if (!cardList) return;
     const cards = getCurrentCards();
     cardList.innerHTML = '';
+
+    if (!state.decks.length) {
+      cardList.innerHTML = '<p class="empty-state">No decks yet.</p>';
+      return;
+    }
 
     if (!cards.length) {
       cardList.innerHTML = '<p class="empty-state">No cards yet. Add one above.</p>';
@@ -541,6 +566,7 @@ function setupEntryPage() {
       currentIndex = 0;
       saveState();
       updateDeckOptions();
+      refreshNoDeckState();
       updateEntryCardCount();
       renderCardList();
     }
@@ -565,16 +591,18 @@ function setupEntryPage() {
       if (!confirm(`Delete deck "${deck.name}" and all ${deck.cards.length} cards?`)) return;
       const { parseId } = deck;
       state.decks = state.decks.filter((item) => item.id !== deck.id);
-      state.selectedDeckId = state.decks[0].id;
+      state.selectedDeckId = state.decks[0]?.id || null;
       currentIndex = 0;
       saveState();
       deleteFromParse(parseId);
       updateDeckOptions();
+      refreshNoDeckState();
       updateEntryCardCount();
       renderCardList();
     });
   }
 
+  refreshNoDeckState();
   updateEntryCardCount();
   renderCardList();
 }
@@ -1070,7 +1098,8 @@ function setupReviewPage() {
     showElement(getById('gravityStartScreen'), false);
     const fb = getById('gravityFeedback');
     if (fb) fb.classList.add('hidden');
-    gravityState = { deck: shuffle([...cards]), pos: 0, score: 0, lives: 3, duration: 8000, active: true, current: null };
+    const startDuration = window.matchMedia('(pointer: coarse)').matches ? 30000 : 8000;
+    gravityState = { deck: shuffle([...cards]), pos: 0, score: 0, lives: 3, duration: startDuration, active: true, current: null };
     const input = getById('gravityInput');
     if (input) { input.disabled = false; input.value = ''; input.focus(); }
     dropTerm();
@@ -1214,6 +1243,21 @@ function setupReviewPage() {
     reviewCard.addEventListener('keydown', (e) => {
       if ((e.key === 'Enter' || e.key === ' ') && currentMode === 'flashcards') { e.preventDefault(); showingBack = !showingBack; renderCurrentCard(); }
     });
+
+    let swipeStartX = null;
+    reviewCard.addEventListener('touchstart', (e) => {
+      swipeStartX = e.touches[0].clientX;
+    }, { passive: true });
+    reviewCard.addEventListener('touchend', (e) => {
+      if (swipeStartX === null) return;
+      const dx = e.changedTouches[0].clientX - swipeStartX;
+      swipeStartX = null;
+      if (Math.abs(dx) < 50) return;
+      if (currentMode === 'flashcards' || currentMode === 'write') {
+        showingBack = false;
+        changeCard(dx < 0 ? 1 : -1);
+      }
+    }, { passive: true });
   }
   if (flipBtn) flipBtn.addEventListener('click', () => { showingBack = !showingBack; renderCurrentCard(); });
   if (prevBtn) prevBtn.addEventListener('click', () => changeCard(-1));
