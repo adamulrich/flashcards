@@ -320,11 +320,8 @@ async function logOut() {
   try {
     await Parse.User.logOut();
   } catch (e) { console.warn('Parse logout error', e); }
-  state.decks.forEach((d) => { d.parseId = null; d.id = generateId(); });
-  state.selectedDeckId = state.decks[0]?.id || null;
-  saveLocalState();
-  updateDeckOptions();
-  updateUserUI();
+  localStorage.removeItem(STORAGE_KEY);
+  location.reload();
 }
 
 function updateUserUI() {
