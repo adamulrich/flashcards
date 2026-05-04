@@ -419,20 +419,67 @@ function setupEntryPage() {
       return;
     }
 
+    const otherDecks = state.decks.filter((d) => d.id !== state.selectedDeckId);
+
     cards.forEach((card, index) => {
       const item = document.createElement('article');
       item.className = `flashcard${editingIndex === index ? ' flashcard--editing' : ''}`;
+
+      const moveOptions = otherDecks.map((d) =>
+        `<option value="${sanitize(d.id)}">${sanitize(d.name)}</option>`
+      ).join('');
+
       item.innerHTML = `
-        <div class="flashcard-body">
-          <h3>${sanitize(card.term)}</h3>
-          <p>${sanitize(card.definition)}</p>
+        <div class="flashcard-main">
+          <div class="flashcard-body">
+            <h3>${sanitize(card.term)}</h3>
+            <p>${sanitize(card.definition)}</p>
+          </div>
+          <div class="flashcard-actions">
+            <button type="button" class="secondary edit-card-btn">Edit</button>
+            <button type="button" class="secondary duplicate-card-btn">Duplicate</button>
+            ${otherDecks.length ? '<button type="button" class="secondary move-card-btn">Move</button>' : ''}
+            <button type="button" class="danger delete-card-btn">Delete</button>
+          </div>
         </div>
-        <div class="flashcard-actions">
-          <button type="button" class="secondary edit-card-btn">Edit</button>
-          <button type="button" class="danger delete-card-btn">Delete</button>
-        </div>
+        ${otherDecks.length ? `
+        <div class="flashcard-move-row hidden">
+          <select class="move-deck-select">${moveOptions}</select>
+          <button type="button" class="primary move-confirm-btn">Move here</button>
+          <button type="button" class="secondary move-cancel-btn">Cancel</button>
+        </div>` : ''}
       `;
+
       item.querySelector('.edit-card-btn').addEventListener('click', () => setEditMode(index));
+
+      item.querySelector('.duplicate-card-btn').addEventListener('click', () => {
+        const deck = getCurrentDeck();
+        deck.cards.splice(index, 0, { ...card });
+        saveState();
+        renderCardList();
+        updateEntryCardCount();
+      });
+
+      const moveBtn = item.querySelector('.move-card-btn');
+      const moveRow = item.querySelector('.flashcard-move-row');
+      if (moveBtn && moveRow) {
+        moveBtn.addEventListener('click', () => showElement(moveRow, true));
+        item.querySelector('.move-cancel-btn').addEventListener('click', () => showElement(moveRow, false));
+        item.querySelector('.move-confirm-btn').addEventListener('click', () => {
+          const targetId = item.querySelector('.move-deck-select').value;
+          const target = state.decks.find((d) => d.id === targetId);
+          if (!target) return;
+          const deck = getCurrentDeck();
+          deck.cards.splice(index, 1);
+          target.cards.unshift({ ...card });
+          if (editingIndex === index) clearEditMode();
+          else if (editingIndex !== null && editingIndex > index) editingIndex--;
+          saveState();
+          renderCardList();
+          updateEntryCardCount();
+        });
+      }
+
       item.querySelector('.delete-card-btn').addEventListener('click', () => {
         if (!confirm(`Delete "${card.term}"?`)) return;
         const deck = getCurrentDeck();
@@ -443,6 +490,7 @@ function setupEntryPage() {
         renderCardList();
         updateEntryCardCount();
       });
+
       cardList.appendChild(item);
     });
   }
