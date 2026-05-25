@@ -127,6 +127,7 @@ async function loadServerState() {
   try {
     const query = new Parse.Query('Deck');
     query.limit(1000);
+    query.ascending('createdAt');
     const results = await query.find();
     const decks = results.map((obj) => ({
       id: obj.id,
@@ -161,9 +162,12 @@ async function saveToServer() {
       parseObj.set('cards', deck.cards);
       const saved = await parseObj.save();
       if (!deck.parseId) {
+        const oldId = deck.id;
         deck.id = saved.id;
         deck.parseId = saved.id;
+        if (state.selectedDeckId === oldId) state.selectedDeckId = saved.id;
         saveLocalState();
+        updateDeckOptions();
       }
     }
   } catch (error) {
