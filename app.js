@@ -1,5 +1,6 @@
 const STORAGE_KEY = 'flashcards-data-v1';
 const DEFAULT_DECK_NAME = 'Default deck';
+const APP_VERSION = 'v11'; // keep in sync with CACHE_VERSION in service-worker.js
 
 // Replace these with your credentials from https://www.back4app.com (Dashboard → App Settings → Security & Keys)
 const PARSE_APP_ID = 'Kvds5AgivKf3ddglbGdKasIosJQXdv0jqGX6EPaV';
@@ -314,6 +315,8 @@ function updateUserUI() {
 
 async function pageSetup() {
   initParse();
+  const versionEl = getById('appVersion');
+  if (versionEl) setText(versionEl, APP_VERSION);
   updateUserUI(); // show correct state immediately using cached session — no flash
   if (Parse.User.current()) {
     await loadServerState();
